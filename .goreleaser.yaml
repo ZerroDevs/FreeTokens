@@ -1,0 +1,85 @@
+# GoReleaser v2. Runs on a macOS runner: darwin builds need cgo (menu bar + silent Keychain reads);
+# every other target is pure Go (CGO_ENABLED=0) and cross-compiles from the same runner.
+version: 2
+project_name: freetokens
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: darwin
+    main: ./cmd/freetokens
+    binary: freetokens
+    env: [CGO_ENABLED=1]
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+  - id: portable
+    main: ./cmd/freetokens
+    binary: freetokens
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, freebsd, openbsd, netbsd]
+    goarch: [amd64, arm64, arm, "386", riscv64, ppc64le, s390x, loong64]
+    goarm: ["6", "7"]
+    ignore:
+      - { goos: windows, goarch: arm }
+      - { goos: windows, goarch: riscv64 }
+      - { goos: windows, goarch: ppc64le }
+      - { goos: windows, goarch: s390x }
+      - { goos: windows, goarch: loong64 }
+      - { goos: freebsd, goarch: arm }
+      - { goos: freebsd, goarch: "386" }
+      - { goos: freebsd, goarch: ppc64le }
+      - { goos: freebsd, goarch: s390x }
+      - { goos: freebsd, goarch: loong64 }
+      - { goos: freebsd, goarch: riscv64 }
+      - { goos: openbsd, goarch: arm }
+      - { goos: openbsd, goarch: "386" }
+      - { goos: openbsd, goarch: ppc64le }
+      - { goos: openbsd, goarch: s390x }
+      - { goos: openbsd, goarch: loong64 }
+      - { goos: openbsd, goarch: riscv64 }
+      - { goos: netbsd, goarch: arm }
+      - { goos: netbsd, goarch: "386" }
+      - { goos: netbsd, goarch: ppc64le }
+      - { goos: netbsd, goarch: s390x }
+      - { goos: netbsd, goarch: loong64 }
+      - { goos: netbsd, goarch: riscv64 }
+      - { goos: netbsd, goarch: arm64 }
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Asset names must end in _<os>_<arch>[vN] for the in-app updater (go-selfupdate).
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    files: [README.md, LICENSE, NOTICE]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-SNAPSHOT"
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^ci:"]
+
+release:
+  github:
+    owner: tverma101
+    name: FreeTokens
+  draft: false
+  prerelease: auto
+  footer: |
+    Verify downloads against `checksums.txt`. The in-app updater does this automatically and only
+    runs when you turn it on (Settings → Updates).

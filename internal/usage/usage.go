@@ -1,0 +1,314 @@
+// Package usage folds measured token receipts into daily totals and period summaries.
+package usage
+
+import (
+	"math"
+	"sort"
+	"strings"
+	"time"
+)
+
+// UnattributedModel names streams whose serving model is unknown.
+const UnattributedModel = "Unattributed"
+
+// Variant is one source spelling inside a model row (for example a Fast mode or build date).
+type Variant struct {
+	Name         string   `json:"name"`
+	Tokens       int64    `json:"tokens"`
+	CostUSD      *float64 `json:"costUsd,omitempty"`
+	CostComplete bool     `json:"costComplete"`
+}
+
+// ModelRow groups variants of one model.
+type ModelRow struct {
+	Name         string    `json:"name"`
+	Tokens       int64     `json:"tokens"`
+	CostUSD      *float64  `json:"costUsd,omitempty"`
+	CostComplete bool      `json:"costComplete"`
+	Variants     []Variant `json:"variants,omitempty"`
+}
+
+// Day is one local calendar day.
+type Day struct {
+	Date           string     `json:"date"`
+	Tokens         int64      `json:"tokens"`
+	CostUSD        *float64   `json:"costUsd,omitempty"`
+	CostComplete   bool       `json:"costComplete"`
+	Partial        bool       `json:"partial"`
+	Models         []ModelRow `json:"models"`
+	UnknownModels  []string   `json:"unknownModels,omitempty"`
+	UnpricedModels []string   `json:"unpricedModels,omitempty"`
+}
+
+type variantAcc struct {
+	name     string
+	tokens   int64
+	cost     float64
+	priced   bool
+	complete bool
+}
+
+type modelAcc struct {
+	tokens   int64
+	cost     float64
+	priced   bool
+	complete bool
+	variants map[string]*variantAcc
+}
+
+type dayAcc struct {
+	tokens   int64
+	cost     float64
+	priced   bool
+	complete bool
+	models   map[string]*modelAcc
+	unknown  map[string]bool
+	unpriced map[string]bool
+	partial  bool
+}
+
+// Accumulator collects per-day tokens and public-rate cost estimates.
+type Accumulator struct{ days map[string]*dayAcc }
+
+func (a *Accumulator) day(d string) *dayAcc {
+	if a.days == nil {
+		a.days = map[string]*dayAcc{}
+	}
+	x := a.days[d]
+	if x == nil {
+		x = &dayAcc{complete: true, models: map[string]*modelAcc{}, unknown: map[string]bool{}, unpriced: map[string]bool{}}
+		a.days[d] = x
+	}
+	return x
+}
+
+func satAdd(a, b int64) int64 {
+	if b > 0 && a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
+}
+
+// Add records measured tokens; a nil cost marks the day and model incomplete.
+func (a *Accumulator) Add(day string, tokens int64, cost *float64, model, group string) {
+	d := a.day(day)
+	d.tokens = satAdd(d.tokens, tokens)
+	if cost != nil {
+		d.cost += *cost
+		d.priced = true
+	} else if tokens > 0 {
+		d.complete = false
+	}
+	id := group
+	if id == "" {
+		id = model
+	}
+	m := d.models[id]
+	if m == nil {
+		m = &modelAcc{complete: true, variants: map[string]*variantAcc{}}
+		d.models[id] = m
+	}
+	m.tokens = satAdd(m.tokens, tokens)
+	if cost != nil {
+		m.cost += *cost
+		m.priced = true
+	} else if tokens > 0 {
+		m.complete = false
+	}
+	key := strings.ToLower(model)
+	v := m.variants[key]
+	if v == nil {
+		v = &variantAcc{name: model, complete: true}
+		m.variants[key] = v
+	}
+	v.tokens = satAdd(v.tokens, tokens)
+	if cost != nil {
+		v.cost += *cost
+		v.priced = true
+	} else if tokens > 0 {
+		v.complete = false
+	}
+}
+
+// MarkPartial records a run or turn without a complete token receipt.
+func (a *Accumulator) MarkPartial(day string) { a.day(day).partial = true }
+
+// AddUnknownModel records a model nothing names (raises the unknown-pricing warning).
+func (a *Accumulator) AddUnknownModel(day, model string) { a.day(day).unknown[model] = true }
+
+// AddNamedUnpriced records a known model without a public route price (explained gap).
+func (a *Accumulator) AddNamedUnpriced(day, model string) { a.day(day).unpriced[model] = true }
+
+func costPtr(priced bool, v float64) *float64 {
+	if !priced {
+		return nil
+	}
+	return &v
+}
+
+func setList(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// Build returns days newest first.
+func (a *Accumulator) Build() []Day {
+	out := make([]Day, 0, len(a.days))
+	for date, d := range a.days {
+		day := Day{Date: date, Tokens: d.tokens, CostUSD: costPtr(d.priced, d.cost), CostComplete: d.complete,
+			Partial: d.partial, UnknownModels: setList(d.unknown), UnpricedModels: setList(d.unpriced), Models: []ModelRow{}}
+		for name, m := range d.models {
+			row := ModelRow{Name: name, Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
+			if len(m.variants) > 1 || (len(m.variants) == 1 && firstVariant(m).name != name) {
+				for _, v := range m.variants {
+					row.Variants = append(row.Variants, Variant{v.name, v.tokens, costPtr(v.priced, v.cost), v.complete})
+				}
+				sort.Slice(row.Variants, func(i, j int) bool { return row.Variants[i].Tokens > row.Variants[j].Tokens })
+			}
+			day.Models = append(day.Models, row)
+		}
+		sortModels(day.Models)
+		out = append(out, day)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	return out
+}
+
+func firstVariant(m *modelAcc) *variantAcc {
+	for _, v := range m.variants {
+		return v
+	}
+	return nil
+}
+
+func sortModels(rows []ModelRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		ci, cj := 0.0, 0.0
+		if rows[i].CostUSD != nil {
+			ci = *rows[i].CostUSD
+		}
+		if rows[j].CostUSD != nil {
+			cj = *rows[j].CostUSD
+		}
+		if ci != cj {
+			return ci > cj
+		}
+		if rows[i].Tokens != rows[j].Tokens {
+			return rows[i].Tokens > rows[j].Tokens
+		}
+		return rows[i].Name < rows[j].Name
+	})
+}
+
+// DayKey is the local calendar day of t.
+func DayKey(t time.Time) string { return t.Local().Format("2006-01-02") }
+
+// Period summarizes one or more days.
+type Period struct {
+	Label   string   `json:"label"`
+	Tokens  int64    `json:"tokens"`
+	CostUSD *float64 `json:"costUsd,omitempty"`
+	// CostLowerBound means some measured tokens are unpriced or receipts are incomplete.
+	CostLowerBound bool       `json:"costLowerBound"`
+	Partial        bool       `json:"partial"`
+	UnknownModels  []string   `json:"unknownModels,omitempty"`
+	Models         []ModelRow `json:"models"`
+	HasData        bool       `json:"hasData"`
+}
+
+// Summarize merges the given days into one period.
+func Summarize(label string, days []Day, include func(string) bool) Period {
+	p := Period{Label: label, Models: []ModelRow{}}
+	var cost float64
+	priced := false
+	unknown := map[string]bool{}
+	models := map[string]*ModelRow{}
+	for _, d := range days {
+		if !include(d.Date) {
+			continue
+		}
+		p.HasData = p.HasData || d.Tokens > 0 || d.Partial
+		p.Tokens = satAdd(p.Tokens, d.Tokens)
+		if d.CostUSD != nil {
+			cost += *d.CostUSD
+			priced = true
+		}
+		if !d.CostComplete || d.Partial {
+			p.CostLowerBound = true
+		}
+		p.Partial = p.Partial || d.Partial
+		for _, u := range d.UnknownModels {
+			unknown[u] = true
+		}
+		for _, m := range d.Models {
+			row := models[m.Name]
+			if row == nil {
+				row = &ModelRow{Name: m.Name, CostComplete: true}
+				models[m.Name] = row
+			}
+			row.Tokens = satAdd(row.Tokens, m.Tokens)
+			if m.CostUSD != nil {
+				c := *m.CostUSD
+				if row.CostUSD != nil {
+					c += *row.CostUSD
+				}
+				row.CostUSD = &c
+			}
+			row.CostComplete = row.CostComplete && m.CostComplete
+			row.Variants = mergeVariants(row.Variants, m.Variants)
+		}
+	}
+	if priced {
+		p.CostUSD = &cost
+	}
+	p.UnknownModels = setList(unknown)
+	for _, r := range models {
+		p.Models = append(p.Models, *r)
+	}
+	sortModels(p.Models)
+	return p
+}
+
+func mergeVariants(into, add []Variant) []Variant {
+	for _, v := range add {
+		found := false
+		for i := range into {
+			if strings.EqualFold(into[i].Name, v.Name) {
+				into[i].Tokens = satAdd(into[i].Tokens, v.Tokens)
+				if v.CostUSD != nil {
+					c := *v.CostUSD
+					if into[i].CostUSD != nil {
+						c += *into[i].CostUSD
+					}
+					into[i].CostUSD = &c
+				}
+				into[i].CostComplete = into[i].CostComplete && v.CostComplete
+				found = true
+				break
+			}
+		}
+		if !found {
+			into = append(into, v)
+		}
+	}
+	return into
+}
+
+// StandardPeriods returns Today, Yesterday and Last 30 Days (today plus the 29 previous days).
+func StandardPeriods(days []Day, now time.Time) []Period {
+	today := DayKey(now)
+	yesterday := DayKey(now.AddDate(0, 0, -1))
+	first := DayKey(now.AddDate(0, 0, -29))
+	return []Period{
+		Summarize("Today", days, func(d string) bool { return d == today }),
+		Summarize("Yesterday", days, func(d string) bool { return d == yesterday }),
+		Summarize("Last 30 Days", days, func(d string) bool { return d >= first && d <= today }),
+	}
+}

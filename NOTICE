@@ -1,0 +1,21 @@
+FreeTokens
+Copyright (c) 2026 Tejas Verma
+
+This project ports the Freebuff tracker from a fork of QuotaBar/OpenUsage by Robin Ebers
+(MIT License, Copyright (c) 2026 Robin Ebers). It is not affiliated with or endorsed by
+OpenUsage, and does not use the OpenUsage name or logo as its own.
+
+The legacy model-slug digest (FNV-1a over UTF-16 code units) matches the published
+algorithm in Freebuff/Codebuff (Apache License 2.0, Copyright CodebuffAI) so historical
+receipts resolve to the same catalog identities. No Freebuff source code is included.
+
+internal/pricing/pricing_supplement.json is a snapshot of the OpenUsage pricing
+supplement (MIT), refreshed at runtime from
+https://robinebers.github.io/openusage/pricing_supplement.json.
+
+Third-party Go modules keep their own licenses, listed in go.mod, including:
+  fyne.io/systray (Apache-2.0), github.com/creativeprojects/go-selfupdate (MIT),
+  modernc.org/sqlite (BSD-3-Clause), github.com/godbus/dbus/v5 (BSD-2-Clause),
+  github.com/danieljoos/wincred (MIT), github.com/zalando/go-keyring (MIT),
+  github.com/thlib/go-timezone-local (Unlicense or Apache-2.0),
+  golang.org/x/sys (BSD-3-Clause).

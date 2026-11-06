@@ -1,0 +1,6 @@
+/dist/
+/freetokens
+/freetokens.exe
+*.test
+*.out
+.DS_Store
