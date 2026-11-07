@@ -20,6 +20,7 @@ declare global {
     go?: { main?: { App?: Bridge } };
     runtime?: {
       EventsOn(name: string, callback: (payload: Snapshot) => void): () => void;
+      ClipboardSetText?(text: string): Promise<boolean>;
     };
   }
 }
@@ -30,6 +31,16 @@ const app = typeof window === "undefined" ? undefined : window.go?.main?.App;
 export const isDesktop = Boolean(app);
 export const bridge: Bridge | null = app ?? null;
 export const initialSnapshot: Snapshot | null = app ? null : demoSnapshot;
+
+/** copyText puts a short string on the system clipboard from either runtime. */
+export async function copyText(text: string): Promise<void> {
+  const native = window.runtime?.ClipboardSetText;
+  if (native) {
+    await native(text);
+    return;
+  }
+  await navigator.clipboard.writeText(text);
+}
 
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;

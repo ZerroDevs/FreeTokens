@@ -18,7 +18,7 @@ export default function App() {
   const { snapshot, loading, refreshing, loadError, refresh } = useSnapshot();
   const now = useNow();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selection, setSelection] = useState(2);
+  const [selection, setSelection] = useState(3);
   const [expanded, setExpanded] = useState(true);
   const [mode, setMode] = useState<ValueMode>("tokens");
 
@@ -53,22 +53,32 @@ export default function App() {
 
   useEffect(() => {
     if (!isDesktop) return;
-    // A window shown without focus emits blur immediately. Only treat blur as
-    // "clicked away" after the popover itself held focus at least once.
-    let hadFocus = document.hasFocus();
-    const onFocus = () => {
-      hadFocus = true;
+    // A freshly shown window blurs by itself, which would close the popover right after the tray
+    // click opens it. Only a blur after the pointer or a key reached the popover counts as a click
+    // away, and the next hide starts unarmed again.
+    let engaged = false;
+    const onEngage = () => {
+      engaged = true;
     };
     const onBlur = () => {
-      if (!hadFocus) return;
-      hadFocus = false;
+      if (!engaged) return;
+      engaged = false;
       bridge?.RequestHide();
     };
-    window.addEventListener("focus", onFocus);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") engaged = false;
+    };
+    window.addEventListener("pointermove", onEngage, { passive: true });
+    window.addEventListener("pointerdown", onEngage, { passive: true });
+    window.addEventListener("keydown", onEngage);
     window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pointermove", onEngage);
+      window.removeEventListener("pointerdown", onEngage);
+      window.removeEventListener("keydown", onEngage);
       window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
@@ -114,8 +124,8 @@ export default function App() {
                   <div className="mt-3 rounded-[12px] border border-dashed border-line px-4 py-7 text-center">
                     <p className="text-[12px] font-medium text-muted">No token history yet</p>
                     <p className="mt-1 text-[11px] leading-snug text-faint">
-                      FreeTokens reads measured Freebuff and Antigravity runs on this computer. Run a
-                      turn, then refresh.
+                      FreeTokens reads measured Freebuff, Antigravity, Claude, Codex and OpenCode runs
+                      on this computer. Run a turn, then refresh.
                     </p>
                   </div>
                 ) : expanded ? (

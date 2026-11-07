@@ -27,6 +27,8 @@ export interface Variant {
 
 export interface ModelRow {
   name: string;
+  provider?: string;
+  source?: string;
   tokens: number;
   costUsd?: number;
   costComplete: boolean;

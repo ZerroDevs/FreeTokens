@@ -31,7 +31,7 @@ export function PeriodTabs({ periods, selected, onSelect }: Props) {
     <div
       role="tablist"
       aria-label="Usage period"
-      className="grid grid-cols-3 gap-0.5 rounded-[10px] bg-panel p-0.5"
+      className="grid grid-cols-4 gap-0.5 rounded-[10px] bg-panel p-0.5"
     >
       {periods.map((period, index) => {
         const active = index === selected;

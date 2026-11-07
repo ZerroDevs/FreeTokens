@@ -7,9 +7,9 @@ type Props = {
   centerLabel: string;
 };
 
-const SIZE = 140;
-const RADIUS = 57;
-const STROKE = 16;
+const SIZE = 112;
+const RADIUS = 46;
+const STROKE = 13;
 const CIRC = 2 * Math.PI * RADIUS;
 
 export function Donut({ slices, total, centerValue, centerLabel }: Props) {
@@ -17,7 +17,7 @@ export function Donut({ slices, total, centerValue, centerLabel }: Props) {
   let cursor = 0;
 
   return (
-    <div className="relative grid h-[140px] w-[140px] shrink-0 place-items-center">
+    <div className="relative grid h-[112px] w-[112px] shrink-0 place-items-center">
       <svg
         width={SIZE}
         height={SIZE}
@@ -50,7 +50,7 @@ export function Donut({ slices, total, centerValue, centerLabel }: Props) {
         })}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="max-w-[92px] truncate text-[19px] leading-none font-semibold tracking-[-0.02em] text-ink tnum">
+        <span className="max-w-[80px] truncate text-[18px] leading-none font-semibold tracking-[-0.02em] text-ink tnum">
           {centerValue}
         </span>
         <span className="mt-1 text-[10px] text-faint">{centerLabel}</span>
