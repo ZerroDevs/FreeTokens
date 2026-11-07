@@ -58,6 +58,12 @@ func runGUIUI(t *tracker.Tracker, cfg *config.Store) {
 		Bind:             []interface{}{a},
 	}
 	applyPlatformOptions(opts)
+	// macOS owns one AppKit event loop and Wails runs it on the main thread. systray.Run would
+	// start a second [NSApp run] from a background goroutine, so on macOS the tray joins Wails'
+	// loop and its menu bar item is created in domReady, on the main thread.
+	if goruntime.GOOS == "darwin" {
+		a.startTray, _ = systray.RunWithExternalLoop(a.trayReady, nil)
+	}
 	if err := wails.Run(opts); err != nil {
 		log.Printf("gui: %v", err)
 		fmt.Fprintln(os.Stderr, "FreeTokens:", err)
@@ -80,11 +86,17 @@ type App struct {
 	hideTimer  *time.Timer
 	showItem   *systray.MenuItem
 	wake       chan struct{}
+
+	// startTray creates the native tray on platforms where it can't own the event loop.
+	startTray func()
+	trayOnce  sync.Once
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	go a.tray()
+	if a.startTray == nil {
+		go a.tray()
+	}
 	go a.refreshLoop()
 	go a.refresh(false)
 }
@@ -92,6 +104,12 @@ func (a *App) startup(ctx context.Context) {
 // domReady places the hidden popover before the first paint, so it never flashes
 // in the middle of the screen.
 func (a *App) domReady(ctx context.Context) {
+	// macOS: the tray joins this AppKit loop, so it is added here on the main thread.
+	a.trayOnce.Do(func() {
+		if a.startTray != nil {
+			a.startTray()
+		}
+	})
 	x, y := windowPosition(ctx)
 	runtime.WindowSetPosition(ctx, x, y)
 	runtime.WindowShow(ctx)
@@ -115,37 +133,40 @@ func (a *App) beforeClose(context.Context) bool {
 }
 
 func (a *App) tray() {
-	systray.Run(func() {
-		t, r := icon.Tray(false)
-		systray.SetTemplateIcon(t, r)
-		systray.SetTooltip("FreeTokens")
-		systray.SetOnTapped(a.ToggleWindow)
+	systray.Run(a.trayReady, func() {})
+}
 
-		a.showItem = systray.AddMenuItem("Show FreeTokens", "Open the usage popover")
-		refresh := systray.AddMenuItem("Refresh Now", "Refresh now (may ask for keychain access)")
-		dashboard := systray.AddMenuItem("Open Freebuff Account", freebuff.DashboardURL)
-		settings := systray.AddMenuItem("Settings", "Refresh interval and login item")
-		systray.AddSeparator()
-		quit := systray.AddMenuItem(guiQuitLabel(), "")
+// trayReady builds the tray menu once the platform has created the icon.
+func (a *App) trayReady() {
+	t, r := icon.Tray(false)
+	systray.SetTemplateIcon(t, r)
+	systray.SetTooltip("FreeTokens")
+	systray.SetOnTapped(a.ToggleWindow)
 
-		go func() {
-			for {
-				select {
-				case <-a.showItem.ClickedCh:
-					a.ToggleWindow()
-				case <-refresh.ClickedCh:
-					go a.refresh(true)
-				case <-dashboard.ClickedCh:
-					_ = browser.Open(freebuff.DashboardURL)
-				case <-settings.ClickedCh:
-					a.openSettings()
-				case <-quit.ClickedCh:
-					a.Quit()
-					return
-				}
+	a.showItem = systray.AddMenuItem("Show FreeTokens", "Open the usage popover")
+	refresh := systray.AddMenuItem("Refresh Now", "Refresh now (may ask for keychain access)")
+	dashboard := systray.AddMenuItem("Open Freebuff Account", freebuff.DashboardURL)
+	settings := systray.AddMenuItem("Settings", "Refresh interval and login item")
+	systray.AddSeparator()
+	quit := systray.AddMenuItem(guiQuitLabel(), "")
+
+	go func() {
+		for {
+			select {
+			case <-a.showItem.ClickedCh:
+				a.ToggleWindow()
+			case <-refresh.ClickedCh:
+				go a.refresh(true)
+			case <-dashboard.ClickedCh:
+				_ = browser.Open(freebuff.DashboardURL)
+			case <-settings.ClickedCh:
+				a.openSettings()
+			case <-quit.ClickedCh:
+				a.Quit()
+				return
 			}
-		}()
-	}, func() {})
+		}
+	}()
 }
 
 func (a *App) refreshLoop() {
