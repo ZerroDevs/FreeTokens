@@ -11,13 +11,16 @@ import (
 	"time"
 
 	"github.com/tverma101/FreeTokens/internal/antigravity"
+	"github.com/tverma101/FreeTokens/internal/claude"
+	"github.com/tverma101/FreeTokens/internal/codex"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
+	"github.com/tverma101/FreeTokens/internal/opencode"
 	"github.com/tverma101/FreeTokens/internal/pricing"
 	"github.com/tverma101/FreeTokens/internal/usage"
 )
 
 // HistorySourceNote explains what the token and dollar figures mean.
-const HistorySourceNote = "Measured Freebuff usage and local Antigravity app, IDE and Agy CLI usage on this computer; dollars are estimated at public API rates, not what Freebuff or Antigravity charges."
+const HistorySourceNote = "Measured Freebuff usage and local Antigravity app, IDE, Agy CLI, Claude, Codex and OpenCode usage on this computer; dollars are estimated at public API rates, not what Freebuff, Antigravity or the model providers charge."
 
 // Snapshot is one refresh result.
 type Snapshot struct {
@@ -42,6 +45,9 @@ type Tracker struct {
 	Pricing     *pricing.Store
 	Desktop     *freebuff.DesktopScanner
 	Antigravity *antigravity.Scanner
+	Claude      *claude.Scanner
+	Codex       *codex.Scanner
+	OpenCode    *opencode.Scanner
 	Now         func() time.Time
 
 	mu       sync.Mutex
@@ -59,6 +65,9 @@ func New(cacheDir, userAgent string, tz func() string) *Tracker {
 		Pricing:     pricing.NewStore(filepath.Join(cacheDir, "pricing"), userAgent),
 		Desktop:     &freebuff.DesktopScanner{Root: freebuff.DesktopProjectsDir()},
 		Antigravity: antigravity.NewScanner(),
+		Claude:      claude.NewScanner(),
+		Codex:       codex.NewScanner(),
+		OpenCode:    opencode.NewScanner(),
 		Now:         time.Now,
 	}
 }
@@ -167,7 +176,43 @@ func (t *Tracker) Refresh(ctx context.Context, interactive bool) *Snapshot {
 			t.clear("antigravity")
 		}
 	}
-	days := usage.MergeDays(fold.Days, antigravityDays)
+	var claudeDays []usage.Day
+	if t.Claude != nil {
+		claudeDays, err = t.Claude.Scan(ctx, now, t.Pricing.Current())
+		if err != nil {
+			if ctx.Err() != nil {
+				return snap
+			}
+			t.logOnce("claude", "claude code history read failed: %v", err)
+		} else {
+			t.clear("claude")
+		}
+	}
+	var codexDays []usage.Day
+	if t.Codex != nil {
+		codexDays, err = t.Codex.Scan(ctx, now, t.Pricing.Current())
+		if err != nil {
+			if ctx.Err() != nil {
+				return snap
+			}
+			t.logOnce("codex", "codex cli history read failed: %v", err)
+		} else {
+			t.clear("codex")
+		}
+	}
+	var opencodeDays []usage.Day
+	if t.OpenCode != nil {
+		opencodeDays, err = t.OpenCode.Scan(ctx, now, t.Pricing.Current())
+		if err != nil {
+			if ctx.Err() != nil {
+				return snap
+			}
+			t.logOnce("opencode", "opencode history read failed: %v", err)
+		} else {
+			t.clear("opencode")
+		}
+	}
+	days := usage.MergeDays(fold.Days, antigravityDays, claudeDays, codexDays, opencodeDays)
 	first := usage.DayKey(now.AddDate(0, 0, -29))
 	today := usage.DayKey(now)
 	for _, d := range days {

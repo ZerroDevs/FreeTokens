@@ -1,5 +1,5 @@
-// Command freetokens tracks Freebuff hours, sessions and measured token usage from Freebuff and
-// Antigravity, from the system tray or the command line.
+// Command freetokens tracks Freebuff hours, sessions and measured token usage from Freebuff,
+// Antigravity, Claude, Codex and OpenCode, from the system tray or the command line.
 package main
 
 import (
@@ -21,9 +21,12 @@ import (
 
 	"github.com/tverma101/FreeTokens/internal/antigravity"
 	"github.com/tverma101/FreeTokens/internal/autostart"
+	"github.com/tverma101/FreeTokens/internal/claude"
+	"github.com/tverma101/FreeTokens/internal/codex"
 	"github.com/tverma101/FreeTokens/internal/config"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
 	"github.com/tverma101/FreeTokens/internal/instance"
+	"github.com/tverma101/FreeTokens/internal/opencode"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/update"
 	"github.com/tverma101/FreeTokens/internal/view"
@@ -103,7 +106,10 @@ func main() {
 // hasDesktop guesses whether a tray can be shown.
 func hasDesktop() bool {
 	switch runtime.GOOS {
-	case "darwin", "windows":
+	case "darwin":
+		// A remote login has no window server, so the popover can't open.
+		return os.Getenv("SSH_CONNECTION") == ""
+	case "windows":
 		return true
 	}
 	return os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
@@ -181,6 +187,9 @@ func runDiagnose() error {
 	a, authErr := auth.Load(false)
 	dbs, _ := freebuff.DesktopDatabases(freebuff.DesktopProjectsDir())
 	antigravityDBs := antigravity.Databases(antigravity.DefaultRoots())
+	claudeTranscripts := claude.Transcripts(claude.DefaultRoot())
+	codexRollouts := codex.Transcripts(codex.DefaultRoot())
+	opencodeDB := opencode.DatabasePath()
 	authState := "logged in"
 	switch {
 	case authErr != nil:
@@ -202,6 +211,9 @@ func runDiagnose() error {
 		"auth":                 authState,
 		"desktopDatabases":     len(dbs),
 		"antigravityDatabases": len(antigravityDBs),
+		"claudeTranscripts":    len(claudeTranscripts),
+		"codexSessions":        len(codexRollouts),
+		"opencodeDatabase":     opencodeDB,
 		"autostart":            autostart.Enabled(),
 		"settings":             cfgStore.Load(),
 	}
