@@ -22,6 +22,8 @@ type Variant struct {
 // ModelRow groups variants of one model.
 type ModelRow struct {
 	Name         string    `json:"name"`
+	Provider     string    `json:"provider"`
+	Source       string    `json:"source"`
 	Tokens       int64     `json:"tokens"`
 	CostUSD      *float64  `json:"costUsd,omitempty"`
 	CostComplete bool      `json:"costComplete"`
@@ -38,20 +40,23 @@ type SourceRow struct {
 	Tokens int64  `json:"tokens"`
 }
 
-// antigravitySources maps the store label Antigravity writes into its model rows to the name the
-// popover shows. The IDE label is checked before the app label, which is its prefix.
-var antigravitySources = []struct{ prefix, label string }{
+// originSources maps the source label a history reader writes into its model rows to the name the
+// popover shows. The IDE label is checked before the Antigravity app label, which is its prefix.
+var originSources = []struct{ prefix, label string }{
 	{"Antigravity IDE", "Antigravity IDE"},
 	{"Agy CLI", "Agy CLI"},
 	{"Antigravity", "Antigravity app"},
+	{"Claude", "Claude"},
+	{"Codex", "Codex"},
+	{"OpenCode", "OpenCode"},
 }
 
 // sourceOrder is the display order of the per-source summary.
-var sourceOrder = []string{SourceFreebuff, "Antigravity app", "Antigravity IDE", "Agy CLI"}
+var sourceOrder = []string{SourceFreebuff, "Antigravity app", "Antigravity IDE", "Agy CLI", "Claude", "Codex", "OpenCode"}
 
 // SourceOf names where a model row's tokens were measured.
 func SourceOf(model string) string {
-	for _, s := range antigravitySources {
+	for _, s := range originSources {
 		if strings.HasPrefix(model, s.prefix+" · ") {
 			return s.label
 		}
@@ -100,6 +105,8 @@ type modelAcc struct {
 	cost     float64
 	priced   bool
 	complete bool
+	provider string
+	fallback string
 	variants map[string]*variantAcc
 }
 
@@ -115,7 +122,12 @@ type dayAcc struct {
 }
 
 // Accumulator collects per-day tokens and public-rate cost estimates.
-type Accumulator struct{ days map[string]*dayAcc }
+type Accumulator struct {
+	days map[string]*dayAcc
+	// Vendor supplies the pricing catalog's vendor prefix for a model name. It is only consulted
+	// when no provider keyword matches, and may be nil.
+	Vendor func(string) string
+}
 
 func (a *Accumulator) day(d string) *dayAcc {
 	if a.days == nil {
@@ -138,6 +150,23 @@ func satAdd(a, b int64) int64 {
 
 // Add records measured tokens; a nil cost marks the day and model incomplete.
 func (a *Accumulator) Add(day string, tokens int64, cost *float64, model, group string) {
+	a.add(day, tokens, cost, model, group, "", "")
+}
+
+// AddServed records measured tokens whose serving vendor the source recorded. A non-empty provider
+// wins over the keyword table, because a measured vendor beats a guess from the model name.
+func (a *Accumulator) AddServed(day string, tokens int64, cost *float64, model, group, provider string) {
+	a.add(day, tokens, cost, model, group, provider, "")
+}
+
+// AddOwned records measured tokens for a model the source serves itself, such as an OpenCode Zen
+// model. The provider is used only when neither the keyword table nor the pricing catalog names a
+// vendor, so it never relabels another vendor's model.
+func (a *Accumulator) AddOwned(day string, tokens int64, cost *float64, model, group, provider string) {
+	a.add(day, tokens, cost, model, group, "", provider)
+}
+
+func (a *Accumulator) add(day string, tokens int64, cost *float64, model, group, provider, fallback string) {
 	d := a.day(day)
 	d.tokens = satAdd(d.tokens, tokens)
 	if cost != nil {
@@ -154,6 +183,12 @@ func (a *Accumulator) Add(day string, tokens int64, cost *float64, model, group 
 	if m == nil {
 		m = &modelAcc{complete: true, variants: map[string]*variantAcc{}}
 		d.models[id] = m
+	}
+	if provider != "" {
+		m.provider = provider
+	}
+	if fallback != "" {
+		m.fallback = fallback
 	}
 	m.tokens = satAdd(m.tokens, tokens)
 	if cost != nil {
@@ -212,7 +247,7 @@ func (a *Accumulator) Build() []Day {
 		day := Day{Date: date, Tokens: d.tokens, CostUSD: costPtr(d.priced, d.cost), CostComplete: d.complete,
 			Partial: d.partial, UnknownModels: setList(d.unknown), UnpricedModels: setList(d.unpriced), Models: []ModelRow{}}
 		for name, m := range d.models {
-			row := ModelRow{Name: name, Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
+			row := ModelRow{Name: name, Provider: providerFor(m.provider, m.fallback, name, a.Vendor), Source: SourceOf(name), Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
 			if len(m.variants) > 1 || (len(m.variants) == 1 && firstVariant(m).name != name) {
 				for _, v := range m.variants {
 					row.Variants = append(row.Variants, Variant{v.name, v.tokens, costPtr(v.priced, v.cost), v.complete})
@@ -299,7 +334,11 @@ func Summarize(label string, days []Day, include func(string) bool) Period {
 		for _, m := range d.Models {
 			row := models[m.Name]
 			if row == nil {
-				row = &ModelRow{Name: m.Name, CostComplete: true}
+				provider := m.Provider
+				if provider == "" {
+					provider = ProviderOf(m.Name)
+				}
+				row = &ModelRow{Name: m.Name, Provider: provider, Source: SourceOf(m.Name), CostComplete: true}
 				models[m.Name] = row
 			}
 			row.Tokens = satAdd(row.Tokens, m.Tokens)
@@ -351,14 +390,17 @@ func mergeVariants(into, add []Variant) []Variant {
 	return into
 }
 
-// StandardPeriods returns Today, Yesterday and Last 30 Days (today plus the 29 previous days).
+// StandardPeriods returns Today, Yesterday, Week (today plus the 6 previous days) and
+// Last 30 Days (today plus the 29 previous days).
 func StandardPeriods(days []Day, now time.Time) []Period {
 	today := DayKey(now)
 	yesterday := DayKey(now.AddDate(0, 0, -1))
+	week := DayKey(now.AddDate(0, 0, -6))
 	first := DayKey(now.AddDate(0, 0, -29))
 	return []Period{
 		Summarize("Today", days, func(d string) bool { return d == today }),
 		Summarize("Yesterday", days, func(d string) bool { return d == yesterday }),
+		Summarize("Week", days, func(d string) bool { return d >= week && d <= today }),
 		Summarize("Last 30 Days", days, func(d string) bool { return d >= first && d <= today }),
 	}
 }

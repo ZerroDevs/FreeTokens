@@ -190,7 +190,7 @@ func (s *Scanner) Scan(ctx context.Context, now time.Time, p *pricing.Snapshot) 
 
 // Fold turns measured generations into the shared daily model rows.
 func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
-	var acc usage.Accumulator
+	acc := usage.Accumulator{Vendor: p.Vendor}
 	for _, t := range turns {
 		if t.At.IsZero() || t.At.After(now) {
 			continue

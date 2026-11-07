@@ -438,7 +438,7 @@ func optional(c count) (int64, error) {
 
 func fold(groups [][]*turn, now time.Time, p *pricing.Snapshot, catalog map[string]CatalogEntry) (*Fold, error) {
 	identity := NewIdentity(catalog, p)
-	var acc usage.Accumulator
+	acc := usage.Accumulator{Vendor: p.Vendor}
 	seen := map[string]bool{}
 	for _, g := range groups {
 		for _, t := range g {
