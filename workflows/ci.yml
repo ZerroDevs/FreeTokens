@@ -65,8 +65,8 @@ jobs:
         run: |
           npm ci
           npm run build
-      - run: go vet -tags gui ./cmd/freetokens
-      - run: go build -tags gui ./cmd/freetokens
+      - run: go vet -tags "gui production" ./cmd/freetokens
+      - run: go build -tags "gui production" ./cmd/freetokens
 
   # Builds the real release archives (every target) without publishing them.
   package:

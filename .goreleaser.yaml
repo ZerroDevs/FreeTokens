@@ -21,7 +21,7 @@ builds:
     env: [CGO_ENABLED=1]
     goos: [darwin]
     goarch: [amd64, arm64]
-    tags: [gui]
+    tags: [gui, production]
     flags: [-trimpath]
     ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
   - id: portable
@@ -63,7 +63,7 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [windows]
     goarch: [amd64, arm64, "386"]
-    tags: [gui]
+    tags: [gui, production]
     flags: [-trimpath]
     ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
   - id: windows-gui
@@ -72,7 +72,7 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [windows]
     goarch: [amd64, arm64, "386"]
-    tags: [gui]
+    tags: [gui, production]
     flags: [-trimpath]
     ldflags: ["-s -w -H windowsgui -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
 

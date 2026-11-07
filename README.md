@@ -17,7 +17,12 @@ rates.
 | **Monthly Spend** – when Freebuff reports USD | same |
 | **Session timers** – time left on each active session, in the menu bar title on macOS and in the tooltip elsewhere | same |
 | Legacy **Daily / Weekly / Monthly / 5-Day / Premium** session windows on older accounts | same |
-| **Today / Yesterday / Last 30 Days** tokens per model and by source, with estimated cost | Freebuff hosted run history, Freebuff Desktop's local history, and Antigravity app, IDE and Agy CLI local history |
+| **Today / Yesterday / Week / Last 30 Days** tokens per model and by source, with estimated cost | Freebuff hosted run history, Freebuff Desktop's local history, and Antigravity app, IDE, Agy CLI, Claude, Codex and OpenCode local history |
+
+The usage panel groups by **Tool** (the model row as measured, with the tool that ran it) or by
+**Provider** (the company serving the model), and the donut, its legend and the breakdown all follow
+that choice. Provider grouping keeps a Claude Code, Codex or OpenCode session running another
+provider's model attributed to that provider. The per-source totals sit under the chart in both cases.
 
 Token counts are measured receipts, never estimates. Dollar figures are **estimates at public API
 prices** (the [OpenRouter](https://openrouter.ai/api/v1/models) model list and the OpenUsage
@@ -81,13 +86,14 @@ required; Wails needs Xcode command-line tools on macOS, and GTK/WebKit headers 
 ```bash
 npm --prefix cmd/freetokens/web ci
 npm --prefix cmd/freetokens/web run build
-go build -tags gui ./cmd/freetokens
+go build -tags "gui production" ./cmd/freetokens
 ```
 
-On Linux use the WebKit 4.1 tag (Ubuntu 24.04+):
+The `production` tag is required: without it Wails compiles a desktop stub that opens an error
+dialog instead of the popover. On Linux use the WebKit 4.1 tag (Ubuntu 24.04+):
 
 ```bash
-go build -tags "gui webkit2_41" ./cmd/freetokens
+go build -tags "gui production webkit2_41" ./cmd/freetokens
 ```
 
 Without `-tags gui`, the same source builds the CGO-free CLI and classic tray. Releases are built
@@ -127,6 +133,31 @@ scanner decodes each generation record to keep its token counters, model identit
 timestamp; prompts and tool payloads are discarded and never stored or sent. Antigravity usage is
 labeled by source (**Antigravity**, **Antigravity IDE**, or **Agy CLI**) in the model breakdown, and totalled
 per source (**Freebuff**, **Antigravity app**, **Antigravity IDE**, **Agy CLI**) above it.
+
+Claude Code's transcripts (`~/.claude/projects/**/*.jsonl`) are read-only too. Only assistant
+responses carrying a usage receipt are counted, one turn per message id, so a response split across
+content blocks is not counted twice. Input, output, cache-write and cache-read tokens are all
+included; prompts, thinking blocks and tool payloads are never kept. Those sessions are labelled
+**Claude** in the model breakdown and the per-source summary, because Claude Code can also be pointed
+at non-Anthropic models. The Claude desktop app keeps no local token receipts, so only Claude Code
+sessions are measured.
+
+Codex's session rollouts (`~/.codex/sessions/**/*.jsonl`), written by both the Codex CLI and the
+Codex app, are read-only as well. Each `token_usage_record` is one model response, counted once by
+response id and labelled **Codex**; sessions from Codex versions that only report a running total
+fall back to the per-turn deltas. Codex counts cached input inside its input total, so those are
+split out for the cost estimate instead of being counted twice. The rollouts do not distinguish the
+CLI from the app, so both are reported under the single **Codex** source.
+
+OpenCode's session database (`~/.local/share/opencode/opencode.db`, or `$XDG_DATA_HOME/opencode`)
+is read-only too. Only `assistant` messages carrying token counters are counted: input, output,
+reasoning and cache read/write, where reasoning is reported beside output rather than inside it and
+input excludes cache reads. Prompts, tool output and diffs are never kept. Messages are labelled
+**OpenCode** in the model breakdown and the per-source summary. OpenCode records the provider of
+every message, so that measured vendor is shown even when the model name would suggest another one;
+when the recorded id is a gateway or a host rather than a vendor (`openrouter`, `groq`), the model
+id decides as it does for Claude and Codex. OpenCode's own Zen models, which no public catalog
+lists, are shown as **OpenCode Zen**.
 
 ## Updates (opt-in)
 
