@@ -1,0 +1,111 @@
+# GoReleaser v2. Runs on a macOS runner. The Darwin popover needs cgo (Wails + menu bar +
+# silent Keychain reads); the Windows popover cross-compiles with CGO_ENABLED=0. Linux, BSD and
+# other targets stay CGO-free and keep the classic tray; build the Linux Wails popover from source
+# (it needs webkit2gtk development headers).
+version: 2
+project_name: freetokens
+
+before:
+  hooks:
+    - go mod tidy
+    - npm --prefix cmd/freetokens/web ci
+    - npm --prefix cmd/freetokens/web run build
+    - go test ./...
+    # Windows icon, version info and manifest (cmd/freetokens/rsrc_windows_*.syso, not committed).
+    - go run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --out cmd/freetokens/rsrc --arch amd64,386,arm64 --product-version={{ .Version }} --file-version={{ .Version }}
+
+builds:
+  - id: darwin
+    main: ./cmd/freetokens
+    binary: freetokens
+    env: [CGO_ENABLED=1]
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    tags: [gui]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+  - id: portable
+    main: ./cmd/freetokens
+    binary: freetokens
+    env: [CGO_ENABLED=0]
+    goos: [linux, freebsd, openbsd, netbsd]
+    goarch: [amd64, arm64, arm, "386", riscv64, ppc64le, s390x, loong64]
+    goarm: ["6", "7"]
+    ignore:
+      - { goos: freebsd, goarch: arm }
+      - { goos: freebsd, goarch: "386" }
+      - { goos: freebsd, goarch: ppc64le }
+      - { goos: freebsd, goarch: s390x }
+      - { goos: freebsd, goarch: loong64 }
+      - { goos: freebsd, goarch: riscv64 }
+      - { goos: openbsd, goarch: arm }
+      - { goos: openbsd, goarch: "386" }
+      - { goos: openbsd, goarch: ppc64le }
+      - { goos: openbsd, goarch: s390x }
+      - { goos: openbsd, goarch: loong64 }
+      - { goos: openbsd, goarch: riscv64 }
+      - { goos: netbsd, goarch: arm }
+      - { goos: netbsd, goarch: "386" }
+      - { goos: netbsd, goarch: ppc64le }
+      - { goos: netbsd, goarch: s390x }
+      - { goos: netbsd, goarch: loong64 }
+      - { goos: netbsd, goarch: riscv64 }
+      - { goos: netbsd, goarch: arm64 }
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+
+  # Windows popover. The console-subsystem freetokens.exe stays the CLI and also opens the
+  # popover when started without arguments; freetokensw.exe is the same program with the
+  # windowless subsystem for shortcuts and the login item.
+  - id: windows
+    main: ./cmd/freetokens
+    binary: freetokens
+    env: [CGO_ENABLED=0]
+    goos: [windows]
+    goarch: [amd64, arm64, "386"]
+    tags: [gui]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+  - id: windows-gui
+    main: ./cmd/freetokens
+    binary: freetokensw
+    env: [CGO_ENABLED=0]
+    goos: [windows]
+    goarch: [amd64, arm64, "386"]
+    tags: [gui]
+    flags: [-trimpath]
+    ldflags: ["-s -w -H windowsgui -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}"]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Asset names must end in _<os>_<arch>[vN] for the in-app updater (go-selfupdate).
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    files: [README.md, LICENSE, NOTICE]
+    # Windows zips carry freetokens.exe and freetokensw.exe; other platforms have one binary.
+    allow_different_binary_count: true
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-SNAPSHOT"
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^ci:"]
+
+release:
+  github:
+    owner: tverma101
+    name: FreeTokens
+  draft: false
+  prerelease: auto
+  footer: |
+    Verify downloads against `checksums.txt`. The in-app updater does this automatically and only
+    runs when you turn it on (Settings → Updates).

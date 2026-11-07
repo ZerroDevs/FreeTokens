@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+        if: runner.os != 'Windows'
+      - run: go test ./...
+        if: runner.os == 'Windows'
+
+  # Type-checks and builds the popover that the Go binary embeds.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/freetokens/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/freetokens/web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  # Compiles the Wails popover on the two platforms that ship it prebuilt. Linux needs
+  # webkit2gtk development headers, so its popover is documented as a source build.
+  gui-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/freetokens/web/package-lock.json
+      - name: Build embedded frontend
+        working-directory: cmd/freetokens/web
+        run: |
+          npm ci
+          npm run build
+      - run: go vet -tags gui ./cmd/freetokens
+      - run: go build -tags gui ./cmd/freetokens
+
+  # Builds the real release archives (every target) without publishing them.
+  package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/freetokens/web/package-lock.json
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
+          retention-days: 7
+
+  # Installs an archive the way a user would and exercises every command without a Freebuff
+  # account, using a fake Desktop history to check local usage tracking.
+  install-smoke:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux_amd64.tar.gz }
+          - { os: ubuntu-24.04-arm, target: linux_arm64.tar.gz }
+          - { os: windows-latest, target: windows_amd64.zip }
+          - { os: windows-11-arm, target: windows_arm64.zip }
+          - { os: macos-latest, target: darwin_arm64.tar.gz }
+          - { os: macos-15-intel, target: darwin_amd64.tar.gz }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist
+      - name: Throwaway home with a fake Desktop history
+        run: |
+          home="$RUNNER_TEMP/home"
+          mkdir -p "$home"
+          go run scripts/mkfixture.go "$home"
+          echo "HOME=$home" >> "$GITHUB_ENV"
+          echo "USERPROFILE=$(cygpath -w "$home" 2>/dev/null || echo "$home")" >> "$GITHUB_ENV"
+      - name: Install and run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          archive=$(cd dist && ls freetokens_*_${{ matrix.target }})
+          scripts/smoke.sh "$PWD/dist" "$archive"
