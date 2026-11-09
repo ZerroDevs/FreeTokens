@@ -336,6 +336,20 @@ $checksumFile = Write-FreeTokensChecksums -OutDir $OutDir -Names $produced.ToArr
 if (-not $checksumFile) { Fail 'no artifacts were produced, so there is nothing to checksum' }
 Get-Content -LiteralPath $checksumFile | ForEach-Object { Write-Output "   $_" }
 
+# winget/Scoop/Homebrew files for the artifacts above. The generator hashes the files it names,
+# so it must run after the build; a target that wasn't selected is skipped with a note.
+Write-Step 'Writing package-manager manifests'
+$manifestDir = Join-Path $OutDir 'manifests'
+Push-Location $Root
+try {
+    & go run ./scripts/manifests -version $cleanVer -dist $OutDir -out $manifestDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output 'WARNING: no package-manager manifests were written (they need the Windows or macOS artifacts).'
+    }
+} finally {
+    Pop-Location
+}
+
 Write-Step 'Done'
 Write-Output "   artifacts in $OutDir"
 exit 0

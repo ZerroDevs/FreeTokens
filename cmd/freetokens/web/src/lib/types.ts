@@ -52,12 +52,24 @@ export interface Period {
   hasData: boolean;
 }
 
+export interface Day {
+  date: string;
+  tokens: number;
+  costUsd?: number;
+  costComplete: boolean;
+  partial: boolean;
+}
+
 export interface Snapshot {
   refreshedAt: string;
   quota?: Quota;
   quotaError?: string;
+  /** Machine-readable class for quotaError: signed-out, expired, approval, network or other. */
+  quotaErrorCode?: string;
   historyWarning?: string;
   periods?: Period[];
+  /** Per-day totals for the last 30 days, oldest first. */
+  days?: Day[];
   sourceNote?: string;
 }
 
@@ -86,6 +98,8 @@ export interface UpdateStatus {
   devBuild: boolean;
   /** True when latest is the release the user asked not to be told about again. */
   skipped: boolean;
+  /** Markdown release notes for latest, when the release published them. */
+  notes?: string;
   url?: string;
 }
 

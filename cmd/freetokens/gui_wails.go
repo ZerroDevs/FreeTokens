@@ -24,6 +24,7 @@ import (
 	"github.com/tverma101/FreeTokens/internal/config"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
 	"github.com/tverma101/FreeTokens/internal/icon"
+	"github.com/tverma101/FreeTokens/internal/notify"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/update"
 	"github.com/tverma101/FreeTokens/internal/view"
@@ -53,7 +54,7 @@ const (
 )
 
 func runGUIUI(t *tracker.Tracker, cfg *config.Store) {
-	a := &App{tracker: t, cfg: cfg, version: version, wake: make(chan struct{}, 1)}
+	a := &App{tracker: t, cfg: cfg, version: version, wake: make(chan struct{}, 1), notifier: notify.New()}
 	opts := &options.App{
 		Title:            "FreeTokens",
 		Width:            windowWidth,
@@ -86,10 +87,11 @@ func runGUIUI(t *tracker.Tracker, cfg *config.Store) {
 // App is the Wails bridge. The tracker serializes refreshes; this type serializes the
 // snapshot that the frontend reads and the window state that the tray toggles.
 type App struct {
-	ctx     context.Context
-	tracker *tracker.Tracker
-	cfg     *config.Store
-	version string
+	ctx      context.Context
+	tracker  *tracker.Tracker
+	cfg      *config.Store
+	version  string
+	notifier *notify.Notifier
 
 	mu         sync.Mutex
 	snap       *tracker.Snapshot
@@ -234,6 +236,7 @@ func (a *App) refresh(interactive bool) *tracker.Snapshot {
 		runtime.EventsEmit(ctx, "snapshot", snap)
 	}
 	a.updateTray(snap)
+	a.notifier.Check(snap.Quota, time.Now())
 	return snap
 }
 
@@ -401,8 +404,10 @@ type UpdateStatus struct {
 	Available bool   `json:"available"`
 	DevBuild  bool   `json:"devBuild"`
 	// Skipped is true when the latest release is the one the user asked not to hear about.
-	Skipped bool   `json:"skipped"`
-	URL     string `json:"url,omitempty"`
+	Skipped bool `json:"skipped"`
+	// Notes is the release body, so the settings panel can show what changed before linking out.
+	Notes string `json:"notes,omitempty"`
+	URL   string `json:"url,omitempty"`
 }
 
 func (a *App) CheckForUpdates() (*UpdateStatus, error) {
@@ -419,6 +424,7 @@ func (a *App) CheckForUpdates() (*UpdateStatus, error) {
 		Available: info.Available && !skipped,
 		DevBuild:  !update.IsRelease(a.version),
 		Skipped:   skipped,
+		Notes:     info.Notes,
 		URL:       info.URL,
 	}, nil
 }

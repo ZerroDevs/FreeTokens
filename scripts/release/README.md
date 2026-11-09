@@ -58,6 +58,19 @@ The installer registers the app per user, so there is no UAC prompt: `%LOCALAPPD
 Start Menu shortcuts, an optional desktop shortcut and an optional Start-at-login task that writes
 the same HKCU `Run` value the in-app toggle uses. Uninstalling removes that value.
 
+After the checksum step the build writes `dist/manifests/` with the package-manager files for the
+artifacts it just produced: `winget/` (three `tverma101.FreeTokens.*` YAML files, which
+`winget validate dist\manifests\winget` accepts), `scoop/freetokens.json` and
+`homebrew/freetokens.rb`. Each hash comes from the built file, not from a template. Submitting them
+to winget-pkgs, a Scoop bucket or a Homebrew tap is a separate pull request; nothing is pushed
+there automatically.
+
+## Linux AppImage
+
+The AppImage is built on Linux by `scripts/build-appimage.sh`, so this Windows publisher does not
+produce it — the tag-triggered workflow does, in its `appimage` job. It uses the CGO-free classic
+tray build rather than the Wails popover, and the in-app updater replaces the AppImage file itself.
+
 ## macOS
 
 `FreeTokens-<version>-macOS.zip` needs macOS: it is a Swift package, built by

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatClockHours, formatMoney, formatReset } from "../lib/format";
-import type { Quota } from "../lib/types";
+import type { Meter, Quota } from "../lib/types";
 import { ChevronDownIcon } from "./Icons";
 
 type Props = {
@@ -15,6 +15,38 @@ function hoursLabel(value: number): string {
   return `${formatClockHours(value)} h`;
 }
 
+/**
+ * Burn-down: spend so far divided by time elapsed in the current window gives a pace, and the
+ * remaining budget divided by that pace gives a clock time to run out. "24 h left" is the number
+ * people are given; "runs out around 15:40" is the one they wanted.
+ */
+function burnDown(meter: Meter, now: number): string | null {
+  if (!meter.resetsAt || meter.limit <= 0 || meter.used <= 0) return null;
+  const resetsAt = Date.parse(meter.resetsAt);
+  if (Number.isNaN(resetsAt) || resetsAt <= now) return null;
+
+  const window = meter.periodMs && meter.periodMs > 0 ? meter.periodMs : 24 * 60 * 60 * 1000;
+  const elapsed = now - (resetsAt - window);
+  // A fresh window makes the pace wildly noisy, and a stale one says nothing about today.
+  if (elapsed < 30 * 60 * 1000 || elapsed >= window) return null;
+
+  const remaining = meter.limit - meter.used;
+  const runOutAt = now + remaining / (meter.used / elapsed);
+  if (remaining <= 0) return null;
+  if (runOutAt >= resetsAt) return "Lasts until the reset at this pace";
+
+  const at = new Date(runOutAt);
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const clock = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (at.toDateString() === today.toDateString()) return `At this pace, runs out around ${clock}`;
+  if (at.toDateString() === tomorrow.toDateString()) {
+    return `At this pace, runs out tomorrow around ${clock}`;
+  }
+  return "At this pace it runs out before the reset";
+}
+
 export function DailyHours({ quota, now, sessions }: Props) {
   // Balance and session rows are secondary, so they stay collapsed until asked for.
   const [showMore, setShowMore] = useState(false);
@@ -27,6 +59,7 @@ export function DailyHours({ quota, now, sessions }: Props) {
   // Under a fifth of the budget left, the bar uses the warning colour the tray dot already uses.
   const low = meter.limit > 0 && fraction <= 0.2;
   const reset = formatReset(meter.resetsAt, now);
+  const pace = burnDown(meter, now);
 
   let lead: string;
   let sub: string;
@@ -101,6 +134,7 @@ export function DailyHours({ quota, now, sessions }: Props) {
       </div>
 
       {meter.detail ? <p className="mt-1.5 text-[10.5px] text-faint">{meter.detail}</p> : null}
+      {pace ? <p className="mt-1 text-[10.5px] text-faint">{pace}</p> : null}
 
       {showMore && (balance != null || showMonthly || sessions.length > 0) ? (
         <div id="hours-more" className="mt-2.5 space-y-1.5 border-t border-line/70 pt-2.5">

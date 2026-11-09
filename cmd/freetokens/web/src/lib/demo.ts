@@ -6,6 +6,29 @@ const now = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
 const HOUR = 3600000;
 
+// Sixty days of history, oldest first, ending today: enough for the 30-day period to have a
+// previous window to compare against. The last seven days add up to the Week period above so the
+// comparison line and the donut agree in the preview.
+const PRIOR_30 = Array.from({ length: 30 }, (_, i) => 320 + ((i * 53) % 60));
+const MIDDLE_16 = Array.from({ length: 16 }, (_, i) => 440 + ((i * 37) % 70));
+const LAST_14 = [420, 380, 460, 510, 440, 505, 505, 560, 560, 560, 560, 560, 911.2, 222.5];
+const DAILY_MILLIONS = [...PRIOR_30, ...MIDDLE_16, ...LAST_14];
+const days = DAILY_MILLIONS.map((millions, index) => {
+  const date = new Date(now);
+  date.setDate(date.getDate() - (DAILY_MILLIONS.length - 1 - index));
+  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+  const tokens = Math.round(millions * 1_000_000);
+  return {
+    date: key,
+    tokens,
+    costUsd: Math.round((tokens / 150_000_000) * 100) / 100,
+    costComplete: true,
+    partial: false,
+  };
+});
+
 export const demoSnapshot: Snapshot = {
   refreshedAt: iso(now - 42_000),
   quota: {
@@ -14,7 +37,8 @@ export const demoSnapshot: Snapshot = {
     meters: [
       {
         label: "Daily Hours",
-        used: 0,
+        // A partly spent day gives the card a pace estimate in the preview.
+        used: 44.2,
         limit: 53,
         unit: "hours",
         resetsAt: iso(now + 15 * HOUR + 32 * 60_000),
@@ -26,6 +50,7 @@ export const demoSnapshot: Snapshot = {
     warning: "",
   },
   historyWarning: "",
+  days,
   periods: [
     {
       label: "Today",

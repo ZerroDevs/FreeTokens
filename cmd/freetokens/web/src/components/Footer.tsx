@@ -1,16 +1,17 @@
 import { formatAgo } from "../lib/format";
-import type { Snapshot } from "../lib/types";
+import type { Snapshot, ValueMode } from "../lib/types";
 import { ExternalIcon } from "./Icons";
 
 type Props = {
   snapshot: Snapshot;
   now: number;
+  mode: ValueMode;
   onOpenDashboard: () => void;
   // Shown on hover: the header already names the app, so the footer line doesn't repeat it.
   version?: string;
 };
 
-export function Footer({ snapshot, now, onOpenDashboard, version }: Props) {
+export function Footer({ snapshot, now, mode, onOpenDashboard, version }: Props) {
   const partial = (snapshot.periods ?? []).some((period) => period.hasData && period.partial);
 
   return (
@@ -22,16 +23,18 @@ export function Footer({ snapshot, now, onOpenDashboard, version }: Props) {
         >
           Updated {formatAgo(snapshot.refreshedAt, now)}
         </p>
-        <p
-          className="text-[10.5px] text-faint"
-          title={snapshot.sourceNote ?? "Measured usage at public API rates"}
-        >
-          API-rate estimates
-        </p>
+        {mode === "cost" ? (
+          <p
+            className="text-[10.5px] text-faint"
+            title={snapshot.sourceNote ?? "Measured usage at public API rates"}
+          >
+            API-rate estimates
+          </p>
+        ) : null}
       </div>
       {partial ? (
         <p className="mt-1 text-[10.5px] leading-snug text-warn">
-          Some runs lack complete receipts, so totals are lower bounds.
+          Some runs are missing token counts, so totals are lower bounds.
         </p>
       ) : null}
       <button

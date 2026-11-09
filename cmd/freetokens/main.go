@@ -49,7 +49,7 @@ Usage:
   freetokens diagnose               Print setup diagnostics (never prints tokens)
   freetokens update [--check] [--json] [--scheduled]
                                     Check GitHub Releases and install a verified newer version
-  freetokens config [get | reset | set <key> <value>]
+  freetokens config [get | path | reset | set <key> <value>]
                                     Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false),
                                     theme (dark|light|system), skipped-version
   freetokens autostart [on|off]     Start FreeTokens at login
@@ -411,6 +411,16 @@ func runConfig(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(args) > 0 && args[0] == "path" {
+		// `get` prints JSON and the macOS app parses it, so the file path needs its own
+		// command rather than a line above the document.
+		if _, err := os.Stat(store.Path); errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("%s (not created yet; defaults are in effect)\n", store.Path)
+			return nil
+		}
+		fmt.Println(store.Path)
+		return nil
+	}
 	if len(args) == 0 || args[0] == "get" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -426,7 +436,7 @@ func runConfig(args []string) error {
 		return nil
 	}
 	if args[0] != "set" || len(args) != 3 {
-		return errors.New("usage: freetokens config get | reset | set <auto-update|refresh-minutes|show-timers|theme|skipped-version> <value>")
+		return errors.New("usage: freetokens config get | path | reset | set <auto-update|refresh-minutes|show-timers|theme|skipped-version> <value>")
 	}
 	key, val := args[1], strings.ToLower(args[2])
 	var setErr error
