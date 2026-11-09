@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DailyHours } from "./components/DailyHours";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
+import { HistoryStrip, PeriodComparison } from "./components/History";
 import { ChevronDownIcon } from "./components/Icons";
 import { PeriodTabs, tabLabel } from "./components/PeriodTabs";
 import { Settings } from "./components/Settings";
@@ -13,6 +14,14 @@ import type { Theme, ValueMode } from "./lib/types";
 import { useNow, useSnapshot } from "./lib/useSnapshot";
 
 const DASHBOARD_URL = "https://codebuff.com/account";
+
+// The raw error says what failed; these say what to do about it.
+const QUOTA_HINTS: Record<string, string> = {
+  "signed-out": "Sign in to the Freebuff desktop app, then refresh.",
+  expired: "The Freebuff sign-in expired. Sign in again in the desktop app, then refresh.",
+  approval: "The system blocked the saved sign-in. Allow access, then refresh.",
+  network: "Freebuff could not be reached. Check your connection, then refresh.",
+};
 // Browser previews have no config file, so the demo remembers the theme locally.
 const THEME_KEY = "freetokens-theme";
 
@@ -228,6 +237,11 @@ export default function App() {
                     <p className="mt-1 text-[10.5px] leading-snug text-faint">
                       {snapshot.quotaError || "Freebuff returned no usage session."}
                     </p>
+                    {snapshot.quotaErrorCode && QUOTA_HINTS[snapshot.quotaErrorCode] ? (
+                      <p className="mt-1 text-[10.5px] leading-snug text-muted">
+                        {QUOTA_HINTS[snapshot.quotaErrorCode]}
+                      </p>
+                    ) : null}
                   </section>
                 )}
 
@@ -245,6 +259,15 @@ export default function App() {
                       <PeriodTabs periods={periods} selected={safeSelection} onSelect={setSelection} />
                     </div>
                     {period ? (
+                      <PeriodComparison
+                        label={period.label}
+                        days={snapshot.days ?? []}
+                        now={now}
+                        mode={mode}
+                      />
+                    ) : null}
+                    <HistoryStrip days={snapshot.days ?? []} mode={mode} now={now} />
+                    {period ? (
                       <UsageSection
                         period={period}
                         selected={safeSelection}
@@ -258,7 +281,7 @@ export default function App() {
                       onClick={() => setExpanded(false)}
                       className="mt-2 flex h-8 w-full items-center justify-center gap-1 text-[10.5px] font-medium text-faint transition-colors hover:text-muted"
                     >
-                      Hide model breakdown
+                      Show compact list
                       <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
                     </button>
                   </>
@@ -302,7 +325,7 @@ export default function App() {
                       onClick={() => setExpanded(true)}
                       className="mt-2 flex h-8 w-full items-center justify-center gap-1 text-[10.5px] font-medium text-faint transition-colors hover:text-muted"
                     >
-                      Show model breakdown
+                      Show full view
                       <ChevronDownIcon className="h-3.5 w-3.5" />
                     </button>
                   </>
@@ -316,6 +339,7 @@ export default function App() {
               <Footer
                 snapshot={snapshot}
                 now={now}
+                mode={mode}
                 onOpenDashboard={openDashboard}
                 version={version}
               />

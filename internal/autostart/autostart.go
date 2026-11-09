@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/tverma101/FreeTokens/internal/appimage"
 	"github.com/tverma101/FreeTokens/internal/bundle"
-	"github.com/tverma101/FreeTokens/internal/update"
 )
 
 // ID is the login item identifier.
@@ -27,16 +27,30 @@ type Entry struct {
 const WindowlessName = "freetokensw.exe"
 
 // ErrDevBuild refuses a login item for a binary that runs from Go's build cache: the registered
-// path disappears at the next clean build or reboot, so the toggle would look silently broken.
-var ErrDevBuild = errors.New("Start at login needs an installed build. This development build runs from a temporary path, so a login item would stop working after a restart")
+// path disappears at the next clean build, so the toggle would look silently broken.
+var ErrDevBuild = errors.New("Start at login needs an installed build. This copy runs from Go's build cache, so a login item would stop working after the next build")
 
-// EnableFor registers e unless version is a development build, where the path can't survive a
-// restart. Every entry point (popover, tray menu, CLI) goes through here so they agree.
-func EnableFor(version string, e Entry) error {
-	if !update.IsRelease(version) {
+// EnableFor registers e unless its executable sits in Go's build cache, where `go run` and a bare
+// `go build` leave it. Every entry point (popover, tray menu, CLI) goes through here so they agree.
+func EnableFor(e Entry) error {
+	if len(e.Exec) == 0 {
+		return errors.New("no executable to register")
+	}
+	if inBuildCache(e.Exec[0]) {
 		return ErrDevBuild
 	}
 	return Enable(e)
+}
+
+// inBuildCache reports whether path names a binary Go left in its build cache:
+// $TMPDIR/go-buildNNN/b001/exe/ on Unix, %LOCALAPPDATA%\Temp\go-buildNNN\ on Windows.
+func inBuildCache(path string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+		if strings.HasPrefix(part, "go-build") {
+			return true
+		}
+	}
+	return false
 }
 
 // TrayEntry is the login item for this installation: the running executable with "gui" (which

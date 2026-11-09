@@ -40,14 +40,28 @@ func TestTrayEntryNormalInstall(t *testing.T) {
 }
 
 // A development build runs from Go's build cache, so a login item naming it stops working after
-// the next clean build. EnableFor has to refuse before touching the OS, or the toggle looks broken.
-func TestEnableForRefusesDevelopmentBuild(t *testing.T) {
+// the next build. EnableFor has to refuse before touching the OS, or the toggle looks broken.
+func TestEnableForRefusesBuildCacheExecutable(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	if err := EnableFor("dev", Entry{Exec: []string{"/bin/true"}}); !errors.Is(err, ErrDevBuild) {
-		t.Fatalf("EnableFor(dev) = %v, want ErrDevBuild", err)
+	cached := filepath.Join(t.TempDir(), "go-build412", "b001", "exe", "freetokens")
+	if err := EnableFor(Entry{Exec: []string{cached}}); !errors.Is(err, ErrDevBuild) {
+		t.Fatalf("EnableFor(go run build) = %v, want ErrDevBuild", err)
 	}
 	if Enabled() {
 		t.Fatal("a refused development build still wrote a login item")
+	}
+}
+
+// An installed binary in a stable directory is exactly what a login item is for, so the path check
+// must not refuse it.
+func TestInBuildCache(t *testing.T) {
+	cached := filepath.Join("tmp", "go-build412", "b001", "exe", "freetokens")
+	installed := filepath.Join("home", "me", ".local", "bin", "freetokens")
+	if !inBuildCache(cached) {
+		t.Fatalf("inBuildCache(%q) = false, want true", cached)
+	}
+	if inBuildCache(installed) {
+		t.Fatalf("inBuildCache(%q) = true, want false", installed)
 	}
 }

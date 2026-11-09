@@ -84,8 +84,11 @@ sudo ln -s /Applications/FreeTokens.app/Contents/Helpers/freetokens /usr/local/b
 
 ### Windows
 
-Download `freetokens_<version>_windows_amd64.zip` (or `arm64` / `386`) and extract it to a folder
-such as `%LOCALAPPDATA%\Programs\FreeTokens`. It holds two copies of the same program:
+Download `FreeTokens-<version>-Setup-x64.exe` and run it: it installs per user (no admin
+prompt) into `%LOCALAPPDATA%\Programs\FreeTokens`, adds Start Menu shortcuts, and offers
+start-at-login and a desktop shortcut. The `freetokens_<version>_windows_amd64.zip` (or `arm64` /
+`386`) is still there for a portable copy: extract it to a folder such as
+`%LOCALAPPDATA%\Programs\FreeTokens`. Either way you get two copies of the same program:
 `freetokens.exe` for the command line, and `freetokensw.exe`, which opens the popover without a
 console window. Double-click `freetokensw.exe` (or run `freetokens.exe` with no arguments) and the
 popover appears above the notification area; right-click the tray icon for **Refresh Now**,
@@ -128,9 +131,10 @@ On Linux, `freetokens launcher install` adds a **FreeTokens** entry to your app 
 the menu instead of a terminal; `freetokens launcher remove` takes it out again. The BSDs have no
 standard menu entry, so nothing is written there.
 
-A Linux AppImage works too: **Start at Login** points the autostart entry at the `.AppImage` file
-rather than at the temporary mount it runs from, and updating hands off to the Releases page,
-because an AppImage's read-only mount can't be replaced while it runs.
+An AppImage is published for x86_64: download `FreeTokens-<version>-x86_64.AppImage`, run
+`chmod +x` on it and start it. It carries the classic tray. **Start at Login** points the autostart
+entry at the AppImage file rather than at the temporary mount it runs from, and the updater writes
+the new image over that file (the running mount is never touched) and relaunches it.
 
 ### From source
 
@@ -191,8 +195,10 @@ powershell -ExecutionPolicy Bypass -File scripts\release\PublishReleaseGui.ps1
 ```
 
 It produces the Windows zip and Inno Setup installer, the Linux and macOS CLI archives and, on a
-Mac, `FreeTokens-<version>-macOS.zip`, plus `checksums.txt`. See
-[scripts/release/README.md](scripts/release/README.md) for prerequisites and options.
+Mac, `FreeTokens-<version>-macOS.zip`, plus `checksums.txt` and winget/Scoop/Homebrew manifests for
+the files it built. The tag-triggered workflow publishes the same set and adds the Linux AppImage,
+which needs a Linux host to build. See [scripts/release/README.md](scripts/release/README.md) for
+prerequisites and options.
 
 ## Use
 
@@ -308,7 +314,7 @@ Updates from GitHub Releases**:
 
 - **Never Check** (default)
 - **Check Daily and Notify** shows an **Install** item when a release is available
-- **Check Daily and Install** downloads, verifies and restarts automatically
+- **Check Daily and Auto-Install** downloads, verifies and restarts automatically
 
 Or from the CLI:
 
@@ -321,14 +327,16 @@ freetokens update
 
 Each update is checked against the release's `checksums.txt` (SHA-256) before anything is
 replaced. The macOS app updates as a whole: the new FreeTokens.app must also pass a code signature
-check before it replaces the old one, and then the app relaunches. If FreeTokens is installed
-somewhere you can't write, such as a system directory, update it the way you installed it.
+check before it replaces the old one, and then the app relaunches. A Linux AppImage is updated by
+replacing the file named by `$APPIMAGE` and relaunching it, so a release that carries an AppImage
+asset can update in place. If FreeTokens is installed somewhere you can't write, such as a system
+directory, update it the way you installed it.
 
 ## Settings and files
 
 | What | Where |
 | --- | --- |
-| Settings | the popover gear, the tray's **Settings**, or `freetokens config get` (stored in your OS config directory under `FreeTokens/`) |
+| Settings | the popover gear, the tray's **Settings**, or `freetokens config get`; `freetokens config path` names the file (in your OS config directory under `FreeTokens/`) |
 | Caches, tray log | the OS cache directory under `FreeTokens/` (e.g. `~/Library/Caches/FreeTokens`) |
 | Diagnostics | `freetokens diagnose` prints paths, auth state and numeric quota fields, never tokens |
 
@@ -340,7 +348,8 @@ reads it from the same `theme` key, so one setting covers both. The interval and
 from the command line:
 `freetokens config set refresh-minutes 15` and `freetokens config set theme system`.
 `freetokens config reset` puts every key back to its shipped default, which is the quick way out
-of a stuck update skip or a hand-edited file.
+of a stuck update skip or a hand-edited file, and `freetokens config path` prints the file to edit
+by hand (with a note when it doesn't exist yet and the defaults are in effect).
 
 ## Privacy
 

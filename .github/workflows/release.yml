@@ -46,3 +46,107 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The AppImage has to be built on Linux, so it is a separate job that attaches to the finished
+  # release. internal/update looks for this asset when the app runs from an AppImage.
+  appimage:
+    if: github.repository == 'tverma101/FreeTokens'
+    needs: goreleaser
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build the AppImage
+        shell: bash
+        run: bash scripts/build-appimage.sh "${GITHUB_REF_NAME#v}"
+      - name: Attach it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/FreeTokens-*-x86_64.AppImage --clobber
+
+  # The installer is Inno Setup, so it needs Windows. The archive from goreleaser already carries
+  # freetokens.exe, freetokensw.exe and the docs the script expects.
+  windows-installer:
+    if: github.repository == 'tverma101/FreeTokens'
+    needs: goreleaser
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download the Windows build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$env:GITHUB_REF_NAME" -p "freetokens_*_windows_amd64.zip" -D dist\win
+          Expand-Archive (Get-ChildItem dist\win\*.zip | Select-Object -First 1).FullName -DestinationPath dist\stage
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Compile the installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ver = $env:GITHUB_REF_NAME -replace '^v', ''
+          # Inno's version resource is numeric only, so a -beta suffix is dropped here.
+          $numeric = ($ver -split '-')[0]
+          $parts = @($numeric.Split('.') | Select-Object -First 3)
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $quad = $parts -join '.'
+          $repo = $env:GITHUB_WORKSPACE
+          $define = @(
+            "#define AppVersion `"$ver`""
+            "#define SourceDir `"$repo\dist\stage`""
+            "#define OutputDir `"$repo\dist`""
+            "#define OutputBase `"FreeTokens-$ver-Setup-x64`""
+            "#define IconFile `"$repo\cmd\freetokens\build\windows\icon.ico`""
+            "#define VersionInfoVersion `"$quad`""
+            "#include `"$repo\scripts\release\freetokens.iss`""
+          )
+          Set-Content -LiteralPath dist\installer.iss -Value $define -Encoding ASCII
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" dist\installer.iss
+          if (-not (Test-Path "dist\FreeTokens-$ver-Setup-x64.exe")) { throw "ISCC produced no installer" }
+          gh release upload "$env:GITHUB_REF_NAME" "dist\FreeTokens-$ver-Setup-x64.exe" --clobber
+
+  # winget, Scoop and Homebrew manifests for the artifacts the jobs above attached. A missing
+  # artifact is skipped by the generator, so this stays useful if one platform fails to build.
+  manifests:
+    # Runs even if the AppImage or installer job failed: the generator skips any artifact that is
+    # missing, so a partial release still gets the manifests it can support.
+    if: always() && needs.goreleaser.result == 'success'
+    needs: [goreleaser, appimage, windows-installer]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Generate the manifests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" -D dist
+          go run ./scripts/manifests -version "$version" -dist dist -out dist/manifests
+          cd dist/manifests
+          zip -r "../FreeTokens-${version}-package-manifests.zip" winget scoop homebrew
+      - name: Attach them to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/FreeTokens-*-package-manifests.zip --clobber

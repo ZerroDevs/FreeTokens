@@ -22,6 +22,18 @@ export function formatMoney(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+/**
+ * Compact money for the donut hole, where width is fixed: ~$980, ≥$2.4K, ~$11.5K. Small amounts keep
+ * cents because "<$0.01" and "~$0.04" are different facts.
+ */
+export function formatUsdCompact(value: number, lowerBound = false): string {
+  if (value > 0 && value < 0.01) return "<$0.01";
+  const prefix = lowerBound ? "≥" : "~";
+  if (value >= 1e6) return `${prefix}$${trim(value / 1e6, 1)}M`;
+  if (value >= 1000) return `${prefix}$${trim(value / 1000, 1)}K`;
+  return `${prefix}$${value.toFixed(2)}`;
+}
+
 export function formatHours(value: number): string {
   return `${trim(value, 1)} h`;
 }

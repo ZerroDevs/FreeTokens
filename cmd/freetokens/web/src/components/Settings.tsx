@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge, copyText, errorMessage } from "../lib/api";
+import { plainNotes } from "../lib/notes";
 import type { AutoUpdate, Preferences, Theme, UpdateStatus } from "../lib/types";
 import { BackIcon, CheckIcon, ExternalIcon } from "./Icons";
 
@@ -22,7 +23,7 @@ const THEMES: { value: Theme; label: string; note: string }[] = [
 const POLICIES: { value: AutoUpdate; label: string; note: string }[] = [
   { value: "off", label: "Never", note: "Automatic update checks are off." },
   { value: "notify", label: "Notify", note: "FreeTokens will check daily and name a new release." },
-  { value: "auto", label: "Install", note: "FreeTokens will check daily and install verified releases." },
+  { value: "auto", label: "Auto-install", note: "FreeTokens will check daily and install verified releases." },
 ];
 
 function policyHint(policy: AutoUpdate): string {
@@ -97,8 +98,7 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
     setSaving(true);
     setNote(null);
     try {
-      await bridge.SetStartAtLogin(next);
-      setNote({ kind: "ok", text: next ? "FreeTokens will start at login." : "Login item removed." });
+      await bridge.SetStartAtLogin(next);        setNote({ kind: "ok", text: next ? "FreeTokens will start automatically." : "Login item removed." });
     } catch (error) {
       setPrefs((current) => (current ? { ...current, startAtLogin: !next } : current));
       setNote({ kind: "error", text: errorMessage(error) });
@@ -314,7 +314,7 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h2 id="login-heading" className="text-[12px] font-medium text-muted">
-                    Start at login
+                    {prefs.platform === "windows" ? "Start with Windows" : "Start at login"}
                   </h2>
                   <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
                     Adds the tray icon when you sign in.
@@ -460,6 +460,16 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
                     <>FreeTokens {versionLabel(update.current)} is up to date.</>
                   )}
                 </p>
+              ) : null}
+              {update?.available && update.notes ? (
+                <details className="mt-2 rounded-[8px] bg-panel px-2.5 py-2">
+                  <summary className="cursor-pointer text-[10.5px] font-medium text-muted">
+                    What's new in {update.latest}
+                  </summary>
+                  <p className="scroll-area mt-1.5 max-h-32 overflow-y-auto whitespace-pre-wrap text-[10.5px] leading-snug text-faint">
+                    {plainNotes(update.notes)}
+                  </p>
+                </details>
               ) : null}
               {updateError ? (
                 <p role="alert" className="mt-2 text-[11px] leading-snug text-warn">

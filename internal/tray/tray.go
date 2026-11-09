@@ -21,6 +21,7 @@ import (
 	"github.com/tverma101/FreeTokens/internal/config"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
 	"github.com/tverma101/FreeTokens/internal/icon"
+	"github.com/tverma101/FreeTokens/internal/notify"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/update"
 	"github.com/tverma101/FreeTokens/internal/view"
@@ -58,6 +59,8 @@ type app struct {
 	pending  *update.Info
 	updating bool
 
+	notifier *notify.Notifier
+
 	refreshCh chan bool // true = interactive
 	wakeCh    chan struct{}
 
@@ -78,7 +81,13 @@ type app struct {
 
 // Run blocks until the user quits.
 func Run(opt Options) {
-	a := &app{opt: opt, cfg: opt.Config.Load(), refreshCh: make(chan bool, 1), wakeCh: make(chan struct{}, 1)}
+	a := &app{
+		opt:       opt,
+		cfg:       opt.Config.Load(),
+		refreshCh: make(chan bool, 1),
+		wakeCh:    make(chan struct{}, 1),
+		notifier:  notify.New(),
+	}
 	systray.Run(a.onReady, func() {})
 }
 
@@ -152,7 +161,7 @@ func (a *app) onReady() {
 	sub(a.settings, "Updates from GitHub Releases")
 	a.updOff = a.settings.AddSubMenuItemCheckbox("Never Check", "FreeTokens never contacts GitHub", false)
 	a.updNotify = a.settings.AddSubMenuItemCheckbox("Check Daily and Notify", "", false)
-	a.updAuto = a.settings.AddSubMenuItemCheckbox("Check Daily and Install", "Installs only checksum-verified releases", false)
+	a.updAuto = a.settings.AddSubMenuItemCheckbox("Check Daily and Auto-Install", "Installs only checksum-verified releases", false)
 	a.settings.AddSeparator()
 	sub(a.settings, "Refresh Every")
 	a.intervals = map[int]*systray.MenuItem{}
@@ -305,7 +314,7 @@ func (a *app) toggleLogin() {
 	} else {
 		var entry autostart.Entry
 		if entry, err = autostart.TrayEntry(); err == nil {
-			err = autostart.EnableFor(a.opt.Version, entry)
+			err = autostart.EnableFor(entry)
 		}
 	}
 	if err != nil {
@@ -343,6 +352,7 @@ func (a *app) refreshLoop() {
 		minutes := a.cfg.RefreshMinutes
 		a.mu.Unlock()
 		a.render()
+		a.notifier.Check(snap.Quota, time.Now())
 		timer := time.NewTimer(time.Duration(minutes) * time.Minute)
 		select {
 		case interactive = <-a.refreshCh:

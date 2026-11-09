@@ -104,10 +104,9 @@ func Apply(ctx context.Context, info *Info) error {
 	if info.App != "" {
 		return applyApp(ctx, info, info.App)
 	}
-	// The AppImage mount is read-only and vanishes on exit, so replacing the running file can
-	// only fail. Say what to do instead of surfacing a read-only file system error.
-	if appimage.Path() != "" {
-		return errors.New("FreeTokens is running from an AppImage, which cannot replace itself. Download the new AppImage from the Releases page")
+	// An AppImage runs from a read-only mount, but $APPIMAGE names the writable file itself.
+	if path := appimage.Path(); path != "" {
+		return applyAppImage(ctx, info, path)
 	}
 	exe, err := selfupdate.ExecutablePath()
 	if err != nil {
