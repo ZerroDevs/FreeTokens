@@ -362,9 +362,9 @@ func (a *App) SetStartAtLogin(on bool) error {
 	if err != nil {
 		return err
 	}
-	// A development build runs from Go's temporary build directory; EnableFor refuses it rather
-	// than registering a path that disappears at the next login.
-	return autostart.EnableFor(a.version, entry)
+	// Go's build cache is not a place a login item can point at; EnableFor refuses it rather than
+	// registering a path that disappears at the next build.
+	return autostart.EnableFor(entry)
 }
 
 // SetAutoUpdate saves the release-check policy the classic tray menu also edits.

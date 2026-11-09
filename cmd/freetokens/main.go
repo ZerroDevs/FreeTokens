@@ -500,7 +500,7 @@ func runAutostart(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := autostart.EnableFor(version, entry); err != nil {
+		if err := autostart.EnableFor(entry); err != nil {
 			return err
 		}
 		fmt.Printf("FreeTokens will start at login: %s\n", strings.Join(entry.Exec, " "))

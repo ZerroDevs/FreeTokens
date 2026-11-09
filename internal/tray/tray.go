@@ -314,7 +314,7 @@ func (a *app) toggleLogin() {
 	} else {
 		var entry autostart.Entry
 		if entry, err = autostart.TrayEntry(); err == nil {
-			err = autostart.EnableFor(a.opt.Version, entry)
+			err = autostart.EnableFor(entry)
 		}
 	}
 	if err != nil {
