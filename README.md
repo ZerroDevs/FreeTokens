@@ -175,6 +175,20 @@ other applications (`libgtk-3-0` and `libwebkit2gtk-4.1-0` on Debian/Ubuntu, `gt
 Without `-tags gui`, the same source builds the CGO-free CLI and classic tray. Releases are built
 with GoReleaser, which runs the frontend build first.
 
+## Publish a release
+
+Tagged pushes run [.github/workflows/release.yml](.github/workflows/release.yml) on a macOS runner.
+To cut a release from Windows without CI, `scripts/release/PublishReleaseGui.ps1` builds the same
+downloads locally and uploads them with the GitHub API:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\release\PublishReleaseGui.ps1
+```
+
+It produces the Windows zip and Inno Setup installer, the Linux and macOS CLI archives and, on a
+Mac, `FreeTokens-<version>-macOS.zip`, plus `checksums.txt`. See
+[scripts/release/README.md](scripts/release/README.md) for prerequisites and options.
+
 ## Use
 
 ```bash
