@@ -262,14 +262,17 @@ func (a *App) OpenDashboard() error { return browser.Open(freebuff.DashboardURL)
 type Preferences struct {
 	RefreshMinutes int    `json:"refreshMinutes"`
 	StartAtLogin   bool   `json:"startAtLogin"`
+	Theme          string `json:"theme"`
 	Version        string `json:"version"`
 	Platform       string `json:"platform"`
 }
 
 func (a *App) GetPreferences() Preferences {
+	cfg := a.cfg.Load()
 	return Preferences{
-		RefreshMinutes: a.cfg.Load().RefreshMinutes,
+		RefreshMinutes: cfg.RefreshMinutes,
 		StartAtLogin:   autostart.Enabled(),
+		Theme:          cfg.Theme,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
 	}
@@ -288,6 +291,18 @@ func (a *App) SaveRefreshMinutes(minutes int) error {
 	default:
 	}
 	return nil
+}
+
+// SetTheme saves the panel theme so it survives restarts. The frontend applies it immediately;
+// nothing here redraws the window.
+func (a *App) SetTheme(theme string) error {
+	switch theme {
+	case config.ThemeDark, config.ThemeLight:
+	default:
+		return errors.New("theme must be dark or light")
+	}
+	_, err := a.cfg.Update(func(c *config.Config) { c.Theme = theme })
+	return err
 }
 
 func (a *App) SetStartAtLogin(on bool) error {

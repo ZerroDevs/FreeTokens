@@ -9,6 +9,27 @@ import (
 	"testing"
 )
 
+// The panel theme is opt-in, so a missing or unrecognized value must load as dark rather than
+// leaving the popover with no palette, and a chosen theme must survive a save/load round trip.
+func TestThemeDefaultsToDarkAndRoundTrips(t *testing.T) {
+	store := &Store{Path: filepath.Join(t.TempDir(), "config.json")}
+	if got := store.Load().Theme; got != ThemeDark {
+		t.Fatalf("default theme = %q, want %q", got, ThemeDark)
+	}
+	if err := os.WriteFile(store.Path, []byte(`{"theme":"solarized"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Load().Theme; got != ThemeDark {
+		t.Fatalf("unrecognized theme = %q, want %q", got, ThemeDark)
+	}
+	if _, err := store.Update(func(c *Config) { c.Theme = ThemeLight }); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Load().Theme; got != ThemeLight {
+		t.Fatalf("saved theme = %q, want %q", got, ThemeLight)
+	}
+}
+
 // A sharing violation or permission error during replacement must never delete
 // the user's last valid settings or leave a staging file behind.
 func TestConfigReplaceFailurePreservesExistingSettings(t *testing.T) {

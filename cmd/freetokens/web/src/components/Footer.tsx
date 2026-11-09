@@ -32,7 +32,7 @@ export function Footer({ snapshot, now, onOpenDashboard }: Props) {
       <button
         type="button"
         onClick={onOpenDashboard}
-        className="mt-2 flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] bg-raised text-[12px] font-medium text-ink transition-colors hover:bg-[#332f29]"
+        className="mt-2 flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] bg-raised text-[12px] font-medium text-ink transition-colors hover:bg-raised-hover"
       >
         Open Freebuff account
         <ExternalIcon className="h-3.5 w-3.5 text-muted" />

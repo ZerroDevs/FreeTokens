@@ -310,6 +310,10 @@ somewhere you can't write, such as a system directory, update it the way you ins
 | Caches, tray log | the OS cache directory under `FreeTokens/` (e.g. `~/Library/Caches/FreeTokens`) |
 | Diagnostics | `freetokens diagnose` prints paths, auth state and numeric quota fields, never tokens |
 
+The popover's **Settings** panel holds the refresh interval, **Start at login**, and the panel theme
+(dark by default, or light). The interval and theme also work from the command line:
+`freetokens config set refresh-minutes 15` and `freetokens config set theme light`.
+
 ## Privacy
 
 FreeTokens sends requests only to:

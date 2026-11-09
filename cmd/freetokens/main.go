@@ -50,7 +50,8 @@ Usage:
   freetokens update [--check] [--json] [--scheduled]
                                     Check GitHub Releases and install a verified newer version
   freetokens config [get | set <key> <value>]
-                                    Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false)
+                                    Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false),
+                                    theme (dark|light)
   freetokens autostart [on|off]     Start FreeTokens at login
   freetokens version
 
@@ -400,7 +401,7 @@ func runConfig(args []string) error {
 		return enc.Encode(store.Load())
 	}
 	if args[0] != "set" || len(args) != 3 {
-		return errors.New("usage: freetokens config set <auto-update|refresh-minutes|show-timers> <value>")
+		return errors.New("usage: freetokens config set <auto-update|refresh-minutes|show-timers|theme> <value>")
 	}
 	key, val := args[1], strings.ToLower(args[2])
 	var setErr error
@@ -428,6 +429,13 @@ func runConfig(args []string) error {
 				c.ShowTimers = false
 			default:
 				setErr = errors.New("show-timers must be true or false")
+			}
+		case "theme":
+			switch val {
+			case config.ThemeDark, config.ThemeLight:
+				c.Theme = val
+			default:
+				setErr = errors.New("theme must be dark or light")
 			}
 		default:
 			setErr = fmt.Errorf("unknown key %q", key)

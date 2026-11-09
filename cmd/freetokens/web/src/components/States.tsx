@@ -26,7 +26,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 h-8 rounded-[8px] bg-raised px-3 text-[11.5px] font-medium text-ink transition-colors hover:bg-[#332f29]"
+        className="mt-3 h-8 rounded-[8px] bg-raised px-3 text-[11.5px] font-medium text-ink transition-colors hover:bg-raised-hover"
       >
         Try again
       </button>

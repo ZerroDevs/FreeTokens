@@ -1,4 +1,4 @@
-import type { Preferences, Snapshot, UpdateStatus } from "./types";
+import type { Preferences, Snapshot, Theme, UpdateStatus } from "./types";
 import { demoSnapshot } from "./demo";
 
 interface Bridge {
@@ -8,6 +8,7 @@ interface Bridge {
   GetPreferences(): Promise<Preferences>;
   SaveRefreshMinutes(minutes: number): Promise<void>;
   SetStartAtLogin(on: boolean): Promise<void>;
+  SetTheme(theme: Theme): Promise<void>;
   CheckForUpdates(): Promise<UpdateStatus>;
   OpenReleases(): Promise<void>;
   RequestHide(): void;

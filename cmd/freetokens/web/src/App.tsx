@@ -9,10 +9,20 @@ import { ErrorState, LoadingState } from "./components/States";
 import { UsageSection } from "./components/UsageSection";
 import { bridge, isDesktop } from "./lib/api";
 import { formatTokens, formatUsd } from "./lib/format";
-import type { ValueMode } from "./lib/types";
+import type { Theme, ValueMode } from "./lib/types";
 import { useNow, useSnapshot } from "./lib/useSnapshot";
 
 const DASHBOARD_URL = "https://codebuff.com/account";
+// Browser previews have no config file, so the demo remembers the theme locally.
+const THEME_KEY = "freetokens-theme";
+
+function storedTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
 
 export default function App() {
   const { snapshot, loading, refreshing, loadError, refresh } = useSnapshot();
@@ -21,6 +31,7 @@ export default function App() {
   const [selection, setSelection] = useState(3);
   const [expanded, setExpanded] = useState(true);
   const [mode, setMode] = useState<ValueMode>("tokens");
+  const [theme, setTheme] = useState<Theme>(() => (bridge ? "dark" : storedTheme()));
 
   const periods = snapshot?.periods ?? [];
   const safeSelection = periods.length === 0 ? 0 : Math.min(selection, periods.length - 1);
@@ -32,6 +43,36 @@ export default function App() {
     );
     return Array.from(new Set(all));
   }, [snapshot]);
+
+  useEffect(() => {
+    if (!bridge) return;
+    bridge
+      .GetPreferences()
+      .then((prefs) => setTheme(prefs.theme === "light" ? "light" : "dark"))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const changeTheme = useCallback(
+    async (next: Theme) => {
+      const previous = theme;
+      setTheme(next);
+      try {
+        if (bridge) {
+          await bridge.SetTheme(next);
+        } else {
+          localStorage.setItem(THEME_KEY, next);
+        }
+      } catch (error) {
+        setTheme(previous);
+        throw error;
+      }
+    },
+    [theme],
+  );
 
   useEffect(() => {
     const off = window.runtime?.EventsOn("open-settings", () => setSettingsOpen(true));
@@ -94,10 +135,12 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen p-2">
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/10 bg-shell/90 shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-shell/90 shadow-popover backdrop-blur-2xl">
         {settingsOpen ? (
           <Settings
             demo={!isDesktop}
+            theme={theme}
+            onTheme={changeTheme}
             onBack={() => setSettingsOpen(false)}
             onQuit={quit}
           />

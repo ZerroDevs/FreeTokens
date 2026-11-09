@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge, errorMessage } from "../lib/api";
-import type { Preferences, UpdateStatus } from "../lib/types";
+import type { Preferences, Theme, UpdateStatus } from "../lib/types";
 import { BackIcon, CheckIcon, ExternalIcon } from "./Icons";
 
 type Props = {
   demo: boolean;
+  theme: Theme;
+  onTheme: (theme: Theme) => Promise<void>;
   onBack: () => void;
   onQuit: () => void;
 };
 
 const INTERVALS = [1, 5, 15, 30, 60];
+const THEMES: { value: Theme; label: string }[] = [
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
+];
 
 function versionLabel(version: string): string {
   if (!version || version === "dev" || version === "preview") return "development build";
   return `v${version.replace(/^v/, "")}`;
 }
 
-export function Settings({ demo, onBack, onQuit }: Props) {
+export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -27,7 +33,13 @@ export function Settings({ demo, onBack, onQuit }: Props) {
 
   useEffect(() => {
     if (!bridge) {
-      setPrefs({ refreshMinutes: 5, startAtLogin: false, version: "preview", platform: "browser" });
+      setPrefs({
+        refreshMinutes: 5,
+        startAtLogin: false,
+        theme: "dark",
+        version: "preview",
+        platform: "browser",
+      });
       return;
     }
     bridge
@@ -72,6 +84,23 @@ export function Settings({ demo, onBack, onQuit }: Props) {
       setSaving(false);
     }
   }, [prefs]);
+
+  const saveTheme = useCallback(
+    async (next: Theme) => {
+      if (next === theme || saving) return;
+      setSaving(true);
+      setNote(null);
+      try {
+        await onTheme(next);
+        setNote({ kind: "ok", text: next === "light" ? "Light theme saved." : "Dark theme saved." });
+      } catch (error) {
+        setNote({ kind: "error", text: errorMessage(error) });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [theme, saving, onTheme],
+  );
 
   const checkUpdates = useCallback(async () => {
     if (!bridge) return;
@@ -153,6 +182,36 @@ export function Settings({ demo, onBack, onQuit }: Props) {
               </div>
               <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
                 The background refresh uses the same interval as the tray.
+              </p>
+            </section>
+
+            <section aria-labelledby="appearance-heading" className="mt-4 border-t border-line/70 pt-3">
+              <h2 id="appearance-heading" className="text-[12px] font-medium text-muted">
+                Appearance
+              </h2>
+              <div role="group" aria-label="Theme" className="mt-2 grid grid-cols-2 gap-1">
+                {THEMES.map((option) => {
+                  const active = theme === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={saving}
+                      onClick={() => void saveTheme(option.value)}
+                      className={`h-[30px] rounded-[8px] text-[10.5px] font-medium transition-colors ${
+                        active
+                          ? "bg-raised text-ink"
+                          : "bg-panel text-muted hover:text-ink disabled:hover:text-muted"
+                      } disabled:opacity-60`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
+                Changes this window only. The tray icon follows the system.
               </p>
             </section>
 
