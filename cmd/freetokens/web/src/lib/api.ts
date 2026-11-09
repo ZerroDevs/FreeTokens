@@ -9,6 +9,7 @@ interface Bridge {
   SaveRefreshMinutes(minutes: number): Promise<void>;
   SetStartAtLogin(on: boolean): Promise<void>;
   SetTheme(theme: Theme): Promise<void>;
+  SetShowTimers(on: boolean): Promise<void>;
   CheckForUpdates(): Promise<UpdateStatus>;
   OpenReleases(): Promise<void>;
   StatusText(): Promise<string>;

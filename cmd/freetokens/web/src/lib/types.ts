@@ -67,6 +67,8 @@ export interface Preferences {
   refreshMinutes: number;
   startAtLogin: boolean;
   theme: Theme;
+  /** False when the user turned session countdowns off. */
+  showTimers: boolean;
   version: string;
   platform: string;
   /** True when the window cannot show a transparent margin around the shell. */

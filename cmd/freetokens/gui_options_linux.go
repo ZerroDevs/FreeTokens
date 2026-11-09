@@ -2,48 +2,27 @@
 
 package main
 
-/*
-#cgo LDFLAGS: -lX11
-#include <X11/Xlib.h>
-
-// X11 only shows what is behind a translucent window when a compositing manager owns the
-// _NET_WM_CM_S0 selection. Without one the transparent margin around the rounded shell paints
-// black, which looks like a broken window rather than a popover.
-static int hasCompositor(void) {
-	Display *d = XOpenDisplay(NULL);
-	if (d == NULL) {
-		// No X connection: a Wayland session always composites.
-		return 1;
-	}
-	Atom sel = XInternAtom(d, "_NET_WM_CM_S0", False);
-	int owned = 0;
-	if (sel != None) {
-		owned = XGetSelectionOwner(d, sel) != None;
-	}
-	XCloseDisplay(d);
-	return owned;
-}
-*/
-import "C"
-
 import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
+// The Linux popover is drawn as one opaque card.
+//
+// A translucent window looked broken in practice: xfwm4 here owns _NET_WM_CM_S0 and the
+// window really is ARGB (depth 32), yet WebKitGTK still paints an opaque black backdrop
+// behind the page — with software rendering and with the GPU policy, on both the software
+// and compositing paths. The margin around the rounded shell therefore rendered as a black
+// rectangle. Filling the window with the shell colour and squaring the corners (styles.css,
+// the opaqueWindow preference) looks the same on every desktop and needs no compositor.
 func applyPlatformOptions(o *options.App) {
-	// GTK compositors honour a transparent window but not the Windows acrylic API. The panel is
-	// small and static, so software rendering costs nothing and sidesteps the blank or flickering
-	// WebKit views Linux desktops report with GPU acceleration; it is also what Wails picks when
-	// Linux options are absent (wails#2977).
-	composited := C.hasCompositor() != 0
-	windowOpaque = !composited
+	windowOpaque = true
 	o.Linux = &linux.Options{
-		WindowIsTranslucent: composited,
-		WebviewGpuPolicy:    linux.WebviewGpuPolicyNever,
+		WindowIsTranslucent: false,
+		// Software rendering sidesteps the blank or flickering WebKit views Linux desktops
+		// report with GPU acceleration (wails#2977).
+		WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
 	}
-	if !composited {
-		// Square off the shell instead: the window is the panel, edge to edge, in the shell colour.
-		o.BackgroundColour = &options.RGBA{R: 0x16, G: 0x15, B: 0x12, A: 0xff}
-	}
+	// Backing colour for the frame before the page paints, and for any gap it leaves.
+	o.BackgroundColour = &options.RGBA{R: 0x16, G: 0x15, B: 0x12, A: 0xff}
 }

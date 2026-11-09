@@ -6,16 +6,21 @@ type Props = {
   snapshot: Snapshot;
   now: number;
   onOpenDashboard: () => void;
+  // Shown on hover: the header already names the app, so the footer line doesn't repeat it.
+  version?: string;
 };
 
-export function Footer({ snapshot, now, onOpenDashboard }: Props) {
+export function Footer({ snapshot, now, onOpenDashboard, version }: Props) {
   const partial = (snapshot.periods ?? []).some((period) => period.hasData && period.partial);
 
   return (
     <footer className="shrink-0 border-t border-line/70 px-4 py-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[10.5px] text-faint">
-          FreeTokens · updated {formatAgo(snapshot.refreshedAt, now)}
+        <p
+          className="text-[10.5px] text-faint"
+          title={version ? `FreeTokens ${version}` : undefined}
+        >
+          Updated {formatAgo(snapshot.refreshedAt, now)}
         </p>
         <p
           className="text-[10.5px] text-faint"

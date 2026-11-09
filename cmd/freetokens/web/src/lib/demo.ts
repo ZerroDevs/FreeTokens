@@ -21,7 +21,8 @@ export const demoSnapshot: Snapshot = {
       },
     ],
     hoursBalance: 173,
-    activeSessions: [],
+    // A session nine minutes out keeps the countdown row visible in the browser preview.
+    activeSessions: [new Date(Date.now() + 9 * 60_000).toISOString()],
     warning: "",
   },
   historyWarning: "",

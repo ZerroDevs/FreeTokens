@@ -8,7 +8,7 @@ import { Settings } from "./components/Settings";
 import { ErrorState, LoadingState } from "./components/States";
 import { UsageSection } from "./components/UsageSection";
 import { bridge, isDesktop } from "./lib/api";
-import { formatTokens, formatUsd } from "./lib/format";
+import { formatDuration, formatTokens, formatUsd } from "./lib/format";
 import type { Theme, ValueMode } from "./lib/types";
 import { useNow, useSnapshot } from "./lib/useSnapshot";
 
@@ -37,10 +37,23 @@ export default function App() {
   const [mode, setMode] = useState<ValueMode>("tokens");
   const [theme, setTheme] = useState<Theme>(() => (bridge ? "dark" : storedTheme()));
   const [opaque, setOpaque] = useState(false);
+  const [showTimers, setShowTimers] = useState(true);
+  const [version, setVersion] = useState<string | undefined>(undefined);
 
   const periods = snapshot?.periods ?? [];
   const safeSelection = periods.length === 0 ? 0 : Math.min(selection, periods.length - 1);
   const period = periods[safeSelection];
+
+  // Countdowns are live figures, so they are derived from `now` instead of the snapshot, which
+  // only changes on refresh.
+  const sessions = useMemo(() => {
+    const expiries = snapshot?.quota?.activeSessions ?? [];
+    return expiries
+      .map((iso) => Date.parse(iso))
+      .filter((at) => !Number.isNaN(at) && at > now)
+      .sort((a, b) => a - b)
+      .map((at) => formatDuration(at - now));
+  }, [snapshot, now]);
 
   const warnings = useMemo(() => {
     const all = [snapshot?.quotaError, snapshot?.quota?.warning, snapshot?.historyWarning].filter(
@@ -56,6 +69,8 @@ export default function App() {
       .then((prefs) => {
         setTheme(normalizeTheme(prefs.theme));
         setOpaque(prefs.opaqueWindow === true);
+        setShowTimers(prefs.showTimers !== false);
+        setVersion(prefs.version);
       })
       .catch(() => {});
   }, []);
@@ -95,6 +110,20 @@ export default function App() {
       }
     },
     [theme],
+  );
+
+  const changeShowTimers = useCallback(
+    async (next: boolean) => {
+      const previous = showTimers;
+      setShowTimers(next);
+      try {
+        if (bridge) await bridge.SetShowTimers(next);
+      } catch (error) {
+        setShowTimers(previous);
+        throw error;
+      }
+    },
+    [showTimers],
   );
 
   useEffect(() => {
@@ -164,6 +193,8 @@ export default function App() {
             demo={!isDesktop}
             theme={theme}
             onTheme={changeTheme}
+            showTimers={showTimers}
+            onShowTimers={changeShowTimers}
             onBack={() => setSettingsOpen(false)}
             onQuit={quit}
           />
@@ -184,7 +215,21 @@ export default function App() {
               <ErrorState message={loadError} onRetry={() => void refresh()} />
             ) : snapshot ? (
               <main className="scroll-area min-h-0 flex-1 overflow-y-auto px-4 pb-2">
-                {snapshot.quota ? <DailyHours quota={snapshot.quota} now={now} /> : null}
+                {snapshot.quota ? (
+                  <DailyHours quota={snapshot.quota} now={now} sessions={showTimers ? sessions : []} />
+                ) : (
+                  // Hours are a hosted figure. Without a readable Freebuff login the section would
+                  // vanish and the panel would look like it lost a feature instead of a login.
+                  <section aria-labelledby="hours-heading" className="rounded-[12px] bg-panel px-3.5 py-3">
+                    <h2 id="hours-heading" className="text-[12px] font-medium text-muted">
+                      Daily Hours
+                    </h2>
+                    <p className="mt-1 text-[13px] leading-snug text-ink">Hours unavailable</p>
+                    <p className="mt-1 text-[10.5px] leading-snug text-faint">
+                      {snapshot.quotaError || "Freebuff returned no usage session."}
+                    </p>
+                  </section>
+                )}
 
                 {periods.length === 0 ? (
                   <div className="mt-3 rounded-[12px] border border-dashed border-line px-4 py-7 text-center">
@@ -267,7 +312,14 @@ export default function App() {
               <LoadingState refreshing={refreshing} />
             )}
 
-            {snapshot ? <Footer snapshot={snapshot} now={now} onOpenDashboard={openDashboard} /> : null}
+            {snapshot ? (
+              <Footer
+                snapshot={snapshot}
+                now={now}
+                onOpenDashboard={openDashboard}
+                version={version}
+              />
+            ) : null}
           </>
         )}
       </div>

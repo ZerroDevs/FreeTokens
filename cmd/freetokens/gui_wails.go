@@ -44,6 +44,12 @@ const (
 	windowHeight = 560
 	// hideDelay lets a tray click cancel the blur that the click itself causes.
 	hideDelay = 220 * time.Millisecond
+	// showRefreshAge is how stale the snapshot may be before opening the popover refreshes it.
+	// Opening is when the numbers have to be current; re-opening shouldn't hammer the API.
+	showRefreshAge = 20 * time.Second
+	// trayMenuSuppression keeps a tray menu click from closing the popover: that click steals focus,
+	// which the frontend reports as a click away.
+	trayMenuSuppression = 2 * time.Second
 )
 
 func runGUIUI(t *tracker.Tracker, cfg *config.Store) {
@@ -93,6 +99,10 @@ type App struct {
 	hideTimer  *time.Timer
 	showItem   *systray.MenuItem
 	wake       chan struct{}
+
+	lastRefresh      time.Time
+	trayWarn         bool
+	suppressHideTill time.Time
 
 	// startTray creates the native tray on platforms where it can't own the event loop.
 	startTray func()
@@ -163,6 +173,9 @@ func (a *App) trayReady() {
 			case <-a.showItem.ClickedCh:
 				a.ToggleWindow()
 			case <-refresh.ClickedCh:
+				// Without this the menu click's blur reads as a click away and hides the panel the
+				// refresh was meant to update.
+				a.suppressHide()
 				go a.refresh(true)
 			case <-dashboard.ClickedCh:
 				_ = browser.Open(freebuff.DashboardURL)
@@ -213,6 +226,7 @@ func (a *App) refresh(interactive bool) *tracker.Snapshot {
 
 	a.mu.Lock()
 	a.snap = snap
+	a.lastRefresh = time.Now()
 	a.refreshing = false
 	ctx = a.ctx
 	a.mu.Unlock()
@@ -241,6 +255,20 @@ func (a *App) updateTray(snap *tracker.Snapshot) {
 		}
 	}
 	systray.SetTooltip(line)
+	a.setTrayWarn(trayNeedsAttention(snap))
+}
+
+// setTrayWarn redraws the tray glyph only when the state flips.
+func (a *App) setTrayWarn(warn bool) {
+	a.mu.Lock()
+	if a.trayWarn == warn {
+		a.mu.Unlock()
+		return
+	}
+	a.trayWarn = warn
+	a.mu.Unlock()
+	t, r := icon.Tray(warn)
+	systray.SetTemplateIcon(t, r)
 }
 
 func max0(v float64) float64 {
@@ -267,6 +295,7 @@ type Preferences struct {
 	RefreshMinutes int    `json:"refreshMinutes"`
 	StartAtLogin   bool   `json:"startAtLogin"`
 	Theme          string `json:"theme"`
+	ShowTimers     bool   `json:"showTimers"`
 	Version        string `json:"version"`
 	Platform       string `json:"platform"`
 	// OpaqueWindow is true when the window has no transparent margin to blend (no compositor).
@@ -279,6 +308,7 @@ func (a *App) GetPreferences() Preferences {
 		RefreshMinutes: cfg.RefreshMinutes,
 		StartAtLogin:   autostart.Enabled(),
 		Theme:          cfg.Theme,
+		ShowTimers:     cfg.ShowTimers,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
 		OpaqueWindow:   windowOpaque,
@@ -309,6 +339,13 @@ func (a *App) SetTheme(theme string) error {
 		return errors.New("theme must be dark, light or system")
 	}
 	_, err := a.cfg.Update(func(c *config.Config) { c.Theme = theme })
+	return err
+}
+
+// SetShowTimers saves whether session countdowns appear in the hours card. It is the same setting
+// the classic tray's menu bar timer uses, so both stay in step.
+func (a *App) SetShowTimers(on bool) error {
+	_, err := a.cfg.Update(func(c *config.Config) { c.ShowTimers = on })
 	return err
 }
 
@@ -392,11 +429,34 @@ func (a *App) ToggleWindow() {
 	runtime.WindowSetPosition(ctx, x, y)
 	runtime.WindowShow(ctx)
 	runtime.WindowSetAlwaysOnTop(ctx, true)
+	// A login or a finished turn may have landed since the scheduled refresh.
+	a.refreshOnShow()
+}
+
+// refreshOnShow refreshes a snapshot older than showRefreshAge without blocking the window.
+func (a *App) refreshOnShow() {
+	a.mu.Lock()
+	stale := a.snap == nil || time.Since(a.lastRefresh) > showRefreshAge
+	a.mu.Unlock()
+	if stale {
+		go a.refresh(false)
+	}
+}
+
+// suppressHide ignores the blur that a tray menu click causes.
+func (a *App) suppressHide() {
+	a.mu.Lock()
+	a.suppressHideTill = time.Now().Add(trayMenuSuppression)
+	a.mu.Unlock()
 }
 
 // RequestHide hides after a short delay so a tray click can cancel it.
 func (a *App) RequestHide() {
 	a.mu.Lock()
+	if time.Now().Before(a.suppressHideTill) {
+		a.mu.Unlock()
+		return
+	}
 	if a.hideTimer != nil {
 		a.hideTimer.Stop()
 	}
@@ -468,6 +528,8 @@ func (a *App) showWindow() {
 	runtime.WindowSetPosition(ctx, x, y)
 	runtime.WindowShow(ctx)
 	runtime.WindowSetAlwaysOnTop(ctx, true)
+	// A login or a finished turn may have landed since the scheduled refresh.
+	a.refreshOnShow()
 }
 
 // Quit ends the process from either the popover or the tray.

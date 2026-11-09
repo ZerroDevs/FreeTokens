@@ -31,7 +31,9 @@ export function PeriodTabs({ periods, selected, onSelect }: Props) {
     <div
       role="tablist"
       aria-label="Usage period"
-      className="grid grid-cols-4 gap-0.5 rounded-[10px] bg-panel p-0.5"
+      className="grid gap-0.5 rounded-[10px] bg-panel p-0.5"
+      // One column per period the engine actually returns; a fixed four left gaps or wrapped tabs.
+      style={{ gridTemplateColumns: `repeat(${periods.length}, minmax(0, 1fr))` }}
     >
       {periods.map((period, index) => {
         const active = index === selected;

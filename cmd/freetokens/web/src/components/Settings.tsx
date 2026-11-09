@@ -7,6 +7,8 @@ type Props = {
   demo: boolean;
   theme: Theme;
   onTheme: (theme: Theme) => Promise<void>;
+  showTimers: boolean;
+  onShowTimers: (on: boolean) => Promise<void>;
   onBack: () => void;
   onQuit: () => void;
 };
@@ -23,7 +25,7 @@ function versionLabel(version: string): string {
   return `v${version.replace(/^v/, "")}`;
 }
 
-export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
+export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBack, onQuit }: Props) {
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -39,6 +41,7 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
         refreshMinutes: 5,
         startAtLogin: false,
         theme: "dark",
+        showTimers: true,
         version: "preview",
         platform: "browser",
       });
@@ -104,6 +107,21 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
     },
     [theme, saving, onTheme],
   );
+
+  const saveTimers = useCallback(async () => {
+    if (demo || saving) return;
+    const next = !showTimers;
+    setSaving(true);
+    setNote(null);
+    try {
+      await onShowTimers(next);
+      setNote({ kind: "ok", text: next ? "Session countdowns shown." : "Session countdowns hidden." });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [demo, saving, showTimers, onShowTimers]);
 
   const checkUpdates = useCallback(async () => {
     if (!bridge) return;
@@ -256,6 +274,36 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
                   <span
                     className={`absolute top-[3px] h-4 w-4 rounded-full bg-shell transition-[left] motion-reduce:transition-none ${
                       prefs.startAtLogin ? "left-[19px]" : "left-[3px]"
+                    }`}
+                  />
+                </button>
+              </div>
+            </section>
+
+            <section aria-labelledby="timers-heading" className="mt-4 border-t border-line/70 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="timers-heading" className="text-[12px] font-medium text-muted">
+                    Session timer
+                  </h2>
+                  <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                    Shows the active session countdown in the hours card.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showTimers}
+                  aria-labelledby="timers-heading"
+                  disabled={demo || saving}
+                  onClick={() => void saveTimers()}
+                  className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                    showTimers ? "bg-brand" : "bg-track"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-[3px] h-4 w-4 rounded-full bg-shell transition-[left] motion-reduce:transition-none ${
+                      showTimers ? "left-[19px]" : "left-[3px]"
                     }`}
                   />
                 </button>
