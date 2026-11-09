@@ -51,7 +51,7 @@ Usage:
                                     Check GitHub Releases and install a verified newer version
   freetokens config [get | set <key> <value>]
                                     Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false),
-                                    theme (dark|light)
+                                    theme (dark|light|system)
   freetokens autostart [on|off]     Start FreeTokens at login
   freetokens version
 
@@ -432,10 +432,10 @@ func runConfig(args []string) error {
 			}
 		case "theme":
 			switch val {
-			case config.ThemeDark, config.ThemeLight:
+			case config.ThemeDark, config.ThemeLight, config.ThemeSystem:
 				c.Theme = val
 			default:
-				setErr = errors.New("theme must be dark or light")
+				setErr = errors.New("theme must be dark, light or system")
 			}
 		default:
 			setErr = fmt.Errorf("unknown key %q", key)

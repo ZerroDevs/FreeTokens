@@ -11,6 +11,7 @@ interface Bridge {
   SetTheme(theme: Theme): Promise<void>;
   CheckForUpdates(): Promise<UpdateStatus>;
   OpenReleases(): Promise<void>;
+  StatusText(): Promise<string>;
   RequestHide(): void;
   HideWindow(): void;
   Quit(): void;

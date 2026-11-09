@@ -16,9 +16,13 @@ const DASHBOARD_URL = "https://codebuff.com/account";
 // Browser previews have no config file, so the demo remembers the theme locally.
 const THEME_KEY = "freetokens-theme";
 
+function normalizeTheme(value: string | null | undefined): Theme {
+  return value === "light" || value === "system" ? value : "dark";
+}
+
 function storedTheme(): Theme {
   try {
-    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+    return normalizeTheme(localStorage.getItem(THEME_KEY));
   } catch {
     return "dark";
   }
@@ -48,12 +52,21 @@ export default function App() {
     if (!bridge) return;
     bridge
       .GetPreferences()
-      .then((prefs) => setTheme(prefs.theme === "light" ? "light" : "dark"))
+      .then((prefs) => setTheme(normalizeTheme(prefs.theme)))
       .catch(() => {});
   }, []);
 
+  // "system" is resolved here rather than in CSS so the document has one concrete palette and
+  // color-scheme follows it; an OS change while the popover is open re-applies it.
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const query = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const resolved = theme === "system" ? (query.matches ? "light" : "dark") : theme;
+      document.documentElement.dataset.theme = resolved;
+    };
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
   }, [theme]);
 
   const changeTheme = useCallback(

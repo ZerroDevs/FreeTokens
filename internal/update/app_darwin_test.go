@@ -102,12 +102,12 @@ func TestApplyApp(t *testing.T) {
 	}
 	const asset = "FreeTokens-9.9.9-macOS.zip"
 	cases := []struct {
-		name       string
-		unsigned   bool
-		badSum     bool
-		bundleID   string
-		bundleVer  string
-		wantErr    string
+		name      string
+		unsigned  bool
+		badSum    bool
+		bundleID  string
+		bundleVer string
+		wantErr   string
 	}{
 		{name: "installs"},
 		{name: "checksum mismatch", badSum: true, wantErr: "failed verification"},
@@ -128,8 +128,12 @@ func TestApplyApp(t *testing.T) {
 			const correctID = "io.github.tverma101.FreeTokens"
 			app := fakeApp(t, install, "old", correctID, "9.9.8", false)
 			bundleID, bundleVer := tc.bundleID, tc.bundleVer
-			if bundleID == "" { bundleID = correctID }
-			if bundleVer == "" { bundleVer = "9.9.9" }
+			if bundleID == "" {
+				bundleID = correctID
+			}
+			if bundleVer == "" {
+				bundleVer = "9.9.9"
+			}
 			archive := zipApp(t, fakeApp(t, build, "new", bundleID, bundleVer, tc.unsigned), filepath.Join(root, asset))
 			sum := sha256.Sum256(archive)
 			if tc.badSum {

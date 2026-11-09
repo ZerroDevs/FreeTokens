@@ -348,9 +348,6 @@ func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
 			}
 		}
 		acc.Add(day, total, cost, name, "")
-		if cost == nil {
-			acc.AddNamedUnpriced(day, name)
-		}
 	}
 	return acc.Build()
 }

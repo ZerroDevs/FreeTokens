@@ -61,7 +61,7 @@ export interface Snapshot {
   sourceNote?: string;
 }
 
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "system";
 
 export interface Preferences {
   refreshMinutes: number;

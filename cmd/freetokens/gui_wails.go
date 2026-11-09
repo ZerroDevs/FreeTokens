@@ -297,9 +297,9 @@ func (a *App) SaveRefreshMinutes(minutes int) error {
 // nothing here redraws the window.
 func (a *App) SetTheme(theme string) error {
 	switch theme {
-	case config.ThemeDark, config.ThemeLight:
+	case config.ThemeDark, config.ThemeLight, config.ThemeSystem:
 	default:
-		return errors.New("theme must be dark or light")
+		return errors.New("theme must be dark, light or system")
 	}
 	_, err := a.cfg.Update(func(c *config.Config) { c.Theme = theme })
 	return err
@@ -307,6 +307,11 @@ func (a *App) SetTheme(theme string) error {
 
 func (a *App) SetStartAtLogin(on bool) error {
 	if on {
+		// A development build runs from Go's temporary build directory. Registering that path would
+		// disappear at the next login, so the toggle would look like it silently reverted.
+		if !update.IsRelease(a.version) {
+			return errors.New("Start at login needs an installed build. This development build runs from a temporary path, so a login item would stop working after a restart")
+		}
 		entry, err := autostart.TrayEntry()
 		if err != nil {
 			return err
@@ -314,6 +319,18 @@ func (a *App) SetStartAtLogin(on bool) error {
 		return autostart.Enable(entry)
 	}
 	return autostart.Disable()
+}
+
+// StatusText returns the report `freetokens status` prints, so the settings panel can copy it
+// into a bug report without the user hunting for the command.
+func (a *App) StatusText() (string, error) {
+	a.mu.Lock()
+	snap := a.snap
+	a.mu.Unlock()
+	if snap == nil {
+		return "", errors.New("usage has not loaded yet")
+	}
+	return view.Text(snap, time.Now()), nil
 }
 
 // UpdateStatus is the result of a manual release check.

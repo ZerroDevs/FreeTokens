@@ -125,7 +125,6 @@ func TestFoldPricesCachedInputSeparately(t *testing.T) {
 	}
 }
 
-
 // Codex's turn_context.turn_id is optional in the persisted rollout protocol.
 // A model switch in that format must not re-label earlier responses with the final model.
 func TestScanAttributesMissingTurnIDsToModelAtResponseTime(t *testing.T) {
@@ -169,7 +168,6 @@ func TestReadRolloutLateContextAndUnattributedResponse(t *testing.T) {
 		t.Fatalf("late context misattributed: turns=%+v", turns)
 	}
 }
-
 
 // An explicit turn context is authoritative at the moment of the receipt, not forever.
 // A later model change for the same turn ID must not overwrite an earlier model.

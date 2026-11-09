@@ -2,6 +2,7 @@
 /freetokens
 /freetokens.exe
 /freetokensw.exe*
+screenshots/*
 
 # Popover build output and generated Wails bindings
 cmd/freetokens/web/node_modules/

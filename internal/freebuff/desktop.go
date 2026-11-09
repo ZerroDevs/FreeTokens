@@ -459,7 +459,7 @@ type DesktopScanner struct {
 	retained int
 	// unreadable counts malformed rows; unreadableDBs counts known Freebuff stores that failed
 	// to open. Both are surfaced separately rather than silently undercounting usage.
-	unreadable int
+	unreadable    int
 	unreadableDBs int
 }
 
@@ -734,14 +734,10 @@ func fold(groups [][]*turn, now time.Time, p *pricing.Snapshot, catalog map[stri
 				group = ""
 			}
 			acc.Add(day, total, cost, model, group)
-			switch {
-			case cost != nil:
-			case legacy:
-				acc.AddNamedUnpriced(day, model) // explained history gap, not a pricing failure
-			case res.DisplayName == "":
+			// An unpriced history row stays a lower bound via Add's cost= nil; only a
+			// nameless route is worth a warning.
+			if cost == nil && !legacy && res.DisplayName == "" {
 				acc.AddUnknownModel(day, model)
-			default:
-				acc.AddNamedUnpriced(day, model) // known model without a public route price
 			}
 			if t.partial {
 				acc.MarkPartial(day)

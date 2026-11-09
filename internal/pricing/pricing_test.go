@@ -1,7 +1,11 @@
 package pricing
 
 import (
+	"context"
+	"errors"
 	"math"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -70,6 +74,61 @@ func TestVendorReadsThePrefixOfThePricedRoute(t *testing.T) {
 	var none *Snapshot
 	if got := none.Vendor("vendor/model-1-0"); got != "" {
 		t.Errorf("nil snapshot Vendor = %q, want empty", got)
+	}
+}
+
+// A feed is fetched when it is stale, and not again inside the retry window after a failure.
+func TestDueHonoursFreshnessAndRetryWindow(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name             string
+		success, attempt time.Time
+		force            bool
+		want             bool
+	}{
+		{"never fetched", time.Time{}, time.Time{}, false, true},
+		{"fresh success", now.Add(-30 * time.Minute), now.Add(-30 * time.Minute), false, false},
+		{"stale success", now.Add(-61 * time.Minute), now.Add(-61 * time.Minute), false, true},
+		{"recent failure", time.Time{}, now.Add(-10 * time.Minute), false, false},
+		{"expired retry window", time.Time{}, now.Add(-31 * time.Minute), false, true},
+		{"forced", now, now, true, true},
+	}
+	for _, c := range cases {
+		if got := due(c.success, c.attempt, now, c.force); got != c.want {
+			t.Errorf("%s: due = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// A blocked OpenRouter used to hold back the shared "last success" and re-download the supplement
+// on every retry. Each feed now keeps its own schedule.
+type offlineTransport struct{ hits []string }
+
+func (o *offlineTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	o.hits = append(o.hits, req.URL.String())
+	return nil, errors.New("offline in tests")
+}
+
+func TestRefreshLeavesAFreshSupplementAloneWhileOpenRouterRetries(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	store := NewStore(t.TempDir(), "")
+	transport := &offlineTransport{}
+	store.HTTP = &http.Client{Transport: transport}
+	// The supplement succeeded just now; OpenRouter's last failure is past its retry window.
+	store.suppSuccess, store.suppAttempt = now, now
+	store.orAttempt = now.Add(-31 * time.Minute)
+
+	err := store.Refresh(context.Background(), now, false)
+	if err == nil || strings.Contains(err.Error(), "supplement") {
+		t.Fatalf("err = %v, want only the OpenRouter failure", err)
+	}
+	if len(transport.hits) == 0 {
+		t.Fatal("OpenRouter was due but never attempted")
+	}
+	for _, hit := range transport.hits {
+		if hit == SupplementURL {
+			t.Fatalf("supplement fetched while fresh: %v", transport.hits)
+		}
 	}
 }
 

@@ -82,14 +82,13 @@ func summarizeSources(models []ModelRow) []SourceRow {
 
 // Day is one local calendar day.
 type Day struct {
-	Date           string     `json:"date"`
-	Tokens         int64      `json:"tokens"`
-	CostUSD        *float64   `json:"costUsd,omitempty"`
-	CostComplete   bool       `json:"costComplete"`
-	Partial        bool       `json:"partial"`
-	Models         []ModelRow `json:"models"`
-	UnknownModels  []string   `json:"unknownModels,omitempty"`
-	UnpricedModels []string   `json:"unpricedModels,omitempty"`
+	Date          string     `json:"date"`
+	Tokens        int64      `json:"tokens"`
+	CostUSD       *float64   `json:"costUsd,omitempty"`
+	CostComplete  bool       `json:"costComplete"`
+	Partial       bool       `json:"partial"`
+	Models        []ModelRow `json:"models"`
+	UnknownModels []string   `json:"unknownModels,omitempty"`
 }
 
 type variantAcc struct {
@@ -117,7 +116,6 @@ type dayAcc struct {
 	complete bool
 	models   map[string]*modelAcc
 	unknown  map[string]bool
-	unpriced map[string]bool
 	partial  bool
 }
 
@@ -135,7 +133,7 @@ func (a *Accumulator) day(d string) *dayAcc {
 	}
 	x := a.days[d]
 	if x == nil {
-		x = &dayAcc{complete: true, models: map[string]*modelAcc{}, unknown: map[string]bool{}, unpriced: map[string]bool{}}
+		x = &dayAcc{complete: true, models: map[string]*modelAcc{}, unknown: map[string]bool{}}
 		a.days[d] = x
 	}
 	return x
@@ -218,9 +216,6 @@ func (a *Accumulator) MarkPartial(day string) { a.day(day).partial = true }
 // AddUnknownModel records a model nothing names (raises the unknown-pricing warning).
 func (a *Accumulator) AddUnknownModel(day, model string) { a.day(day).unknown[model] = true }
 
-// AddNamedUnpriced records a known model without a public route price (explained gap).
-func (a *Accumulator) AddNamedUnpriced(day, model string) { a.day(day).unpriced[model] = true }
-
 func costPtr(priced bool, v float64) *float64 {
 	if !priced {
 		return nil
@@ -245,7 +240,7 @@ func (a *Accumulator) Build() []Day {
 	out := make([]Day, 0, len(a.days))
 	for date, d := range a.days {
 		day := Day{Date: date, Tokens: d.tokens, CostUSD: costPtr(d.priced, d.cost), CostComplete: d.complete,
-			Partial: d.partial, UnknownModels: setList(d.unknown), UnpricedModels: setList(d.unpriced), Models: []ModelRow{}}
+			Partial: d.partial, UnknownModels: setList(d.unknown), Models: []ModelRow{}}
 		for name, m := range d.models {
 			row := ModelRow{Name: name, Provider: providerFor(m.provider, m.fallback, name, a.Vendor), Source: SourceOf(name), Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
 			if len(m.variants) > 1 || (len(m.variants) == 1 && firstVariant(m).name != name) {

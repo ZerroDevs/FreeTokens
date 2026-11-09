@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { bridge, errorMessage } from "../lib/api";
+import { bridge, copyText, errorMessage } from "../lib/api";
 import type { Preferences, Theme, UpdateStatus } from "../lib/types";
 import { BackIcon, CheckIcon, ExternalIcon } from "./Icons";
 
@@ -12,9 +12,10 @@ type Props = {
 };
 
 const INTERVALS = [1, 5, 15, 30, 60];
-const THEMES: { value: Theme; label: string }[] = [
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
+const THEMES: { value: Theme; label: string; note: string }[] = [
+  { value: "system", label: "System", note: "Following the system appearance." },
+  { value: "dark", label: "Dark", note: "Dark theme saved." },
+  { value: "light", label: "Light", note: "Light theme saved." },
 ];
 
 function versionLabel(version: string): string {
@@ -29,6 +30,7 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
   const [note, setNote] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,7 +94,8 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
       setNote(null);
       try {
         await onTheme(next);
-        setNote({ kind: "ok", text: next === "light" ? "Light theme saved." : "Dark theme saved." });
+        const saved = THEMES.find((option) => option.value === next);
+        setNote({ kind: "ok", text: saved ? saved.note : "Theme saved." });
       } catch (error) {
         setNote({ kind: "error", text: errorMessage(error) });
       } finally {
@@ -113,6 +116,20 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
       setUpdateError(errorMessage(error));
     } finally {
       setChecking(false);
+    }
+  }, []);
+
+  const copyStatus = useCallback(async () => {
+    if (!bridge) return;
+    setCopying(true);
+    setNote(null);
+    try {
+      await copyText(await bridge.StatusText());
+      setNote({ kind: "ok", text: "Status copied to the clipboard." });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setCopying(false);
     }
   }, []);
 
@@ -189,7 +206,7 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
               <h2 id="appearance-heading" className="text-[12px] font-medium text-muted">
                 Appearance
               </h2>
-              <div role="group" aria-label="Theme" className="mt-2 grid grid-cols-2 gap-1">
+              <div role="group" aria-label="Theme" className="mt-2 grid grid-cols-3 gap-1">
                 {THEMES.map((option) => {
                   const active = theme === option.value;
                   return (
@@ -302,6 +319,23 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
               ) : null}
             </section>
 
+            <section aria-labelledby="report-heading" className="mt-4 border-t border-line/70 pt-3">
+              <h2 id="report-heading" className="text-[12px] font-medium text-muted">
+                Report
+              </h2>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                Copies the same text `freetokens status` prints, for a bug report.
+              </p>
+              <button
+                type="button"
+                disabled={demo || copying}
+                onClick={() => void copyStatus()}
+                className="mt-2 h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
+              >
+                {copying ? "Copying…" : "Copy status"}
+              </button>
+            </section>
+
             {!demo ? (
               <section className="mt-4 border-t border-line/70 pt-3">
                 <button
@@ -314,19 +348,21 @@ export function Settings({ demo, theme, onTheme, onBack, onQuit }: Props) {
               </section>
             ) : null}
 
-            <p aria-live="polite" className="mt-3 min-h-[16px] text-[10.5px] leading-snug">
-              {note ? (
-                <span
-                  className={`inline-flex items-center gap-1 ${note.kind === "ok" ? "text-brand-strong" : "text-warn"}`}
-                >
-                  {note.kind === "ok" ? <CheckIcon className="h-3 w-3" /> : null}
-                  {note.text}
-                </span>
-              ) : null}
-            </p>
           </>
         ) : null}
       </div>
+      {/* Pinned below the scroll area: a saved or rejected setting has to be visible without
+          scrolling, since the control that produced it can sit well above the fold. */}
+      <p aria-live="polite" className="min-h-[18px] shrink-0 px-4 pb-3 text-[10.5px] leading-snug">
+        {note ? (
+          <span
+            className={`inline-flex items-start gap-1 ${note.kind === "ok" ? "text-brand-strong" : "text-warn"}`}
+          >
+            {note.kind === "ok" ? <CheckIcon className="mt-[1px] h-3 w-3 shrink-0" /> : null}
+            {note.text}
+          </span>
+        ) : null}
+      </p>
     </div>
   );
 }

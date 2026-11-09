@@ -21,7 +21,6 @@ func MergeDays(groups ...[]Day) []Day {
 			dst.CostComplete = dst.CostComplete && day.CostComplete
 			dst.Partial = dst.Partial || day.Partial
 			dst.UnknownModels = union(dst.UnknownModels, day.UnknownModels)
-			dst.UnpricedModels = union(dst.UnpricedModels, day.UnpricedModels)
 			for _, model := range day.Models {
 				mergeModel(dst, model)
 			}
@@ -46,7 +45,6 @@ func cloneDay(day Day) Day {
 		out.Models[i].Variants = append([]Variant(nil), model.Variants...)
 	}
 	out.UnknownModels = append([]string(nil), day.UnknownModels...)
-	out.UnpricedModels = append([]string(nil), day.UnpricedModels...)
 	return out
 }
 

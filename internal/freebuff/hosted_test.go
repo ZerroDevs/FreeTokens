@@ -74,7 +74,6 @@ func TestHostedScannerReadsCumulativeMetricsAndCaches(t *testing.T) {
 	}
 }
 
-
 func TestWriteFileAtomicPreservesLastValidCacheOnRenameError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hosted.json")

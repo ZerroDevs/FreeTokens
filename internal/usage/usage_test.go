@@ -53,7 +53,6 @@ func TestPeriodsAndLowerBounds(t *testing.T) {
 	var a Accumulator
 	a.Add(today, 100, f(0.5), "A 10/17", "A")
 	a.Add(today, 50, nil, "B", "")
-	a.AddNamedUnpriced(today, "B")
 	a.Add(yesterday, 10, f(0.1), "A Fast", "A")
 	a.Add(mid, 20, f(2), "A", "A")
 	a.Add(old, 999, f(9), "A", "A")

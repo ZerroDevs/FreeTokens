@@ -27,12 +27,16 @@ type Store struct {
 	HTTP      *http.Client
 	UserAgent string
 
-	mu          sync.Mutex
+	mu sync.Mutex
+	// Each feed keeps its own schedule. A shared "last success" tied both feeds to OpenRouter, so
+	// a network that blocks it re-downloaded the supplement on every retry.
 	bundled     *Supplement
 	fetchedSupp *Supplement
 	openRouter  map[string]Rates
-	lastAttempt time.Time
-	lastSuccess time.Time
+	suppSuccess time.Time
+	suppAttempt time.Time
+	orSuccess   time.Time
+	orAttempt   time.Time
 	snapshot    *Snapshot
 }
 
@@ -52,7 +56,7 @@ func NewStore(dir, userAgent string) *Store {
 	if data, err := os.ReadFile(filepath.Join(dir, "openrouter-rates.json")); err == nil {
 		var c orCache
 		if json.Unmarshal(data, &c) == nil && len(c.Entries) > 0 {
-			s.openRouter, s.lastSuccess = c.Entries, c.FetchedAt
+			s.openRouter, s.orSuccess = c.Entries, c.FetchedAt
 		}
 	}
 	return s
@@ -72,41 +76,62 @@ func (s *Store) Current() *Snapshot {
 	return s.snapshot
 }
 
-// Refresh fetches stale feeds. Errors are returned for logging; the previous snapshot stays usable.
+// due reports whether a feed is worth fetching now: stale enough to refresh (or forced), and not
+// inside the retry window that follows a failure.
+func due(success, attempt, now time.Time, force bool) bool {
+	if force {
+		return true
+	}
+	if !success.IsZero() && now.Sub(success) < refreshEvery {
+		return false
+	}
+	return attempt.IsZero() || now.Sub(attempt) >= retryAfter
+}
+
+// Refresh fetches the feeds that are due. Errors are returned for logging; the previous snapshot
+// stays usable, and a feed that is not due keeps its saved data and costs no request.
 func (s *Store) Refresh(ctx context.Context, now time.Time, force bool) error {
 	s.mu.Lock()
-	fresh := !s.lastSuccess.IsZero() && now.Sub(s.lastSuccess) < refreshEvery
-	backoff := !s.lastAttempt.IsZero() && now.Sub(s.lastAttempt) < retryAfter
-	if !force && (fresh || backoff) {
-		s.mu.Unlock()
+	needSupp := due(s.suppSuccess, s.suppAttempt, now, force)
+	needRouter := due(s.orSuccess, s.orAttempt, now, force)
+	if needSupp {
+		s.suppAttempt = now
+	}
+	if needRouter {
+		s.orAttempt = now
+	}
+	s.mu.Unlock()
+	if !needSupp && !needRouter {
 		return nil
 	}
-	s.lastAttempt = now
-	s.mu.Unlock()
 
 	var errs []error
-	if data, err := s.get(ctx, SupplementURL); err == nil {
-		if sup, err := DecodeSupplement(data); err == nil {
-			s.mu.Lock()
-			s.fetchedSupp, s.snapshot = sup, nil
-			s.mu.Unlock()
-			_ = writeAtomic(filepath.Join(s.Dir, "pricing_supplement.json"), data)
+	if needSupp {
+		if data, err := s.get(ctx, SupplementURL); err == nil {
+			if sup, err := DecodeSupplement(data); err == nil {
+				s.mu.Lock()
+				s.fetchedSupp, s.suppSuccess, s.snapshot = sup, now, nil
+				s.mu.Unlock()
+				_ = writeAtomic(filepath.Join(s.Dir, "pricing_supplement.json"), data)
+			} else {
+				errs = append(errs, fmt.Errorf("supplement: %w", err))
+			}
 		} else {
 			errs = append(errs, fmt.Errorf("supplement: %w", err))
 		}
-	} else {
-		errs = append(errs, fmt.Errorf("supplement: %w", err))
 	}
-	entries, err := s.fetchOpenRouter(ctx)
-	if err == nil {
-		s.mu.Lock()
-		s.openRouter, s.lastSuccess, s.snapshot = entries, now, nil
-		s.mu.Unlock()
-		if data, err := json.Marshal(orCache{FetchedAt: now, Entries: entries}); err == nil {
-			_ = writeAtomic(filepath.Join(s.Dir, "openrouter-rates.json"), data)
+	if needRouter {
+		entries, err := s.fetchOpenRouter(ctx)
+		if err == nil {
+			s.mu.Lock()
+			s.openRouter, s.orSuccess, s.snapshot = entries, now, nil
+			s.mu.Unlock()
+			if data, err := json.Marshal(orCache{FetchedAt: now, Entries: entries}); err == nil {
+				_ = writeAtomic(filepath.Join(s.Dir, "openrouter-rates.json"), data)
+			}
+		} else {
+			errs = append(errs, fmt.Errorf("openrouter: %w", err))
 		}
-	} else {
-		errs = append(errs, fmt.Errorf("openrouter: %w", err))
 	}
 	return errors.Join(errs...)
 }

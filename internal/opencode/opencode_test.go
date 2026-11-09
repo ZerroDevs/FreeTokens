@@ -275,9 +275,15 @@ func TestScanDeduplicatesMigratedMessageAcrossSchemas(t *testing.T) {
 func TestScanReportsUnknownOpenCodeSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "opencode.db")
 	db, err := sql.Open("sqlite", filepath.ToSlash(path))
-	if err != nil { t.Fatal(err) }
-	if _, err := db.Exec("CREATE TABLE other_settings(k TEXT)"); err != nil { t.Fatal(err) }
-	if err := db.Close(); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE other_settings(k TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := (&Scanner{Path: path}).Scan(context.Background(), time.Now(), nil); err == nil {
 		t.Fatal("unknown history schema incorrectly returned an empty successful scan")
 	}
@@ -291,7 +297,6 @@ func TestDatabasePathRejectsRelativeXDGData(t *testing.T) {
 		t.Fatalf("relative XDG database path accepted: %s", got)
 	}
 }
-
 
 // Query-side filtering is important: retaining only 30 days *after* decoding
 // would repeatedly read every archived message's JSON on a busy OpenCode install.

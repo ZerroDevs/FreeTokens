@@ -30,6 +30,17 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go vet ./...
+      # Formatting drifted because nothing checked it: vet and the tests both pass on messy code.
+      # Linux only, so a Windows checkout with autocrlf converting to CRLF can't fail the job.
+      - name: Check Go formatting
+        if: runner.os == 'Linux'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
       - run: go test -race ./...
         if: runner.os != 'Windows'
       - run: go test ./...

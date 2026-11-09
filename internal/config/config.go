@@ -19,10 +19,11 @@ const (
 	UpdateAuto   = "auto"
 )
 
-// Panel themes. The popover ships dark; light is opt-in from its settings.
+// Panel themes. The popover ships dark; light and following the OS are opt-in from its settings.
 const (
-	ThemeDark  = "dark"
-	ThemeLight = "light"
+	ThemeDark   = "dark"
+	ThemeLight  = "light"
+	ThemeSystem = "system"
 )
 
 // Config is persisted as JSON in the user config directory.
@@ -34,7 +35,7 @@ type Config struct {
 	RefreshMinutes int `json:"refreshMinutes"`
 	// ShowTimers puts the earliest active session countdown in the tray title (where supported).
 	ShowTimers bool `json:"showTimers"`
-	// Theme is "dark" (default) or "light" for the popover.
+	// Theme is "dark" (default), "light" or "system" (follow the OS appearance).
 	Theme string `json:"theme"`
 	// LastUpdateCheck records the last automatic check.
 	LastUpdateCheck time.Time `json:"lastUpdateCheck,omitempty"`
@@ -61,7 +62,7 @@ func (c *Config) Normalize() {
 		c.RefreshMinutes = 24 * 60
 	}
 	switch c.Theme {
-	case ThemeDark, ThemeLight:
+	case ThemeDark, ThemeLight, ThemeSystem:
 	default:
 		c.Theme = ThemeDark
 	}
