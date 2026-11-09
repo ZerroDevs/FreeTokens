@@ -92,6 +92,25 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* A desktop that cannot composite (Xfce with compositing off, a bare window manager) has no
+   desktop to show through the margin around the shell, so it paints black. The shell then fills
+   the window edge to edge and squares its corners. */
+html[data-opaque="true"] body {
+  background: var(--color-shell);
+}
+
+html[data-opaque="true"] .popover-frame {
+  padding: 0;
+}
+
+html[data-opaque="true"] .popover-shell {
+  border-radius: 0;
+  border-color: transparent;
+  background: var(--color-shell);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 button {
   cursor: pointer;
 }

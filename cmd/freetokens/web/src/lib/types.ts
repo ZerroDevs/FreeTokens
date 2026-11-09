@@ -69,6 +69,8 @@ export interface Preferences {
   theme: Theme;
   version: string;
   platform: string;
+  /** True when the window cannot show a transparent margin around the shell. */
+  opaqueWindow?: boolean;
 }
 
 export interface UpdateStatus {

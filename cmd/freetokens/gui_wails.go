@@ -35,6 +35,10 @@ var assets embed.FS
 // hasPopover reports whether this build embeds the Wails popover instead of only the tray menu.
 const hasPopover = true
 
+// windowOpaque is set by a platform that cannot composite the transparent margin around the
+// panel shell, so the frontend fills the window instead.
+var windowOpaque bool
+
 const (
 	windowWidth  = 380
 	windowHeight = 560
@@ -265,6 +269,8 @@ type Preferences struct {
 	Theme          string `json:"theme"`
 	Version        string `json:"version"`
 	Platform       string `json:"platform"`
+	// OpaqueWindow is true when the window has no transparent margin to blend (no compositor).
+	OpaqueWindow bool `json:"opaqueWindow"`
 }
 
 func (a *App) GetPreferences() Preferences {
@@ -275,6 +281,7 @@ func (a *App) GetPreferences() Preferences {
 		Theme:          cfg.Theme,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
+		OpaqueWindow:   windowOpaque,
 	}
 }
 

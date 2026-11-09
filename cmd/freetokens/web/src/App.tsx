@@ -36,6 +36,7 @@ export default function App() {
   const [expanded, setExpanded] = useState(true);
   const [mode, setMode] = useState<ValueMode>("tokens");
   const [theme, setTheme] = useState<Theme>(() => (bridge ? "dark" : storedTheme()));
+  const [opaque, setOpaque] = useState(false);
 
   const periods = snapshot?.periods ?? [];
   const safeSelection = periods.length === 0 ? 0 : Math.min(selection, periods.length - 1);
@@ -52,9 +53,18 @@ export default function App() {
     if (!bridge) return;
     bridge
       .GetPreferences()
-      .then((prefs) => setTheme(normalizeTheme(prefs.theme)))
+      .then((prefs) => {
+        setTheme(normalizeTheme(prefs.theme));
+        setOpaque(prefs.opaqueWindow === true);
+      })
       .catch(() => {});
   }, []);
+
+  // Platforms without a compositor report an opaque window, so the shell fills it instead of
+  // leaving a transparent margin that would paint black.
+  useEffect(() => {
+    document.documentElement.dataset.opaque = opaque ? "true" : "false";
+  }, [opaque]);
 
   // "system" is resolved here rather than in CSS so the document has one concrete palette and
   // color-scheme follows it; an OS change while the popover is open re-applies it.
@@ -147,8 +157,8 @@ export default function App() {
   const quit = useCallback(() => bridge?.Quit(), []);
 
   return (
-    <div className="flex h-screen w-screen p-2">
-      <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-shell/90 shadow-popover backdrop-blur-2xl">
+    <div className="popover-frame flex h-screen w-screen p-2">
+      <div className="popover-shell flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-shell/90 shadow-popover backdrop-blur-2xl">
         {settingsOpen ? (
           <Settings
             demo={!isDesktop}
