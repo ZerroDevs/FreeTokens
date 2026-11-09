@@ -92,12 +92,24 @@ final class AppModel: ObservableObject {
     func loadSettings() async {
         do {
             settings = try await Engine.json(EngineSettings.self, ["config", "get"], timeout: 30)
+            applyTheme()
         } catch {
             settingsError = error.localizedDescription
         }
     }
 
+    /// The panel follows the configured theme, like the Windows and Linux popover. "system" clears
+    /// the override so AppKit tracks the system appearance again.
+    private func applyTheme() {
+        switch settings.theme {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: NSApp.appearance = nil
+        }
+    }
+
     func setShowTimers(_ on: Bool) { set("show-timers", on ? "true" : "false") }
+    func setTheme(_ theme: String) { set("theme", theme) }
     func setRefreshMinutes(_ minutes: Int) { set("refresh-minutes", String(minutes)) }
     func setAutoUpdate(_ policy: String) {
         set("auto-update", policy) { [weak self] in

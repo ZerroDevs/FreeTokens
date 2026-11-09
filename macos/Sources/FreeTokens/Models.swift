@@ -70,6 +70,7 @@ struct EngineSettings: Decodable, Equatable {
     var autoUpdate: String = "off"
     var refreshMinutes: Int = 5
     var showTimers: Bool = true
+    var theme: String = "system"
 }
 
 /// `freetokens update --json`.

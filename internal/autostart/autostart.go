@@ -3,12 +3,14 @@
 package autostart
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/tverma101/FreeTokens/internal/appimage"
 	"github.com/tverma101/FreeTokens/internal/bundle"
+	"github.com/tverma101/FreeTokens/internal/update"
 )
 
 // ID is the login item identifier.
@@ -23,6 +25,19 @@ type Entry struct {
 // WindowlessName is the GUI-subsystem build shipped beside freetokens.exe on Windows. It starts the
 // tray without a console window, so login items and shortcuts should point at it.
 const WindowlessName = "freetokensw.exe"
+
+// ErrDevBuild refuses a login item for a binary that runs from Go's build cache: the registered
+// path disappears at the next clean build or reboot, so the toggle would look silently broken.
+var ErrDevBuild = errors.New("Start at login needs an installed build. This development build runs from a temporary path, so a login item would stop working after a restart")
+
+// EnableFor registers e unless version is a development build, where the path can't survive a
+// restart. Every entry point (popover, tray menu, CLI) goes through here so they agree.
+func EnableFor(version string, e Entry) error {
+	if !update.IsRelease(version) {
+		return ErrDevBuild
+	}
+	return Enable(e)
+}
 
 // TrayEntry is the login item for this installation: the running executable with "gui" (which
 // falls back to the classic tray on builds without the popover); on Windows, the windowless

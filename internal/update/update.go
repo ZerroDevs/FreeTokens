@@ -58,6 +58,12 @@ func updater(app bool) (*selfupdate.Updater, error) {
 // Normalize strips a leading "v"; empty or "dev" means a development build.
 func Normalize(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
 
+// IsSkipped reports whether latest is the release the user asked not to be told about again.
+func IsSkipped(latest, skipped string) bool {
+	skipped = Normalize(skipped)
+	return skipped != "" && Normalize(latest) == skipped
+}
+
 // IsRelease reports whether v is a comparable release version.
 func IsRelease(v string) bool {
 	v = Normalize(v)

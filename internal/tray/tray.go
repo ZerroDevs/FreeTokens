@@ -6,6 +6,7 @@ package tray
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"runtime"
@@ -304,13 +305,24 @@ func (a *app) toggleLogin() {
 	} else {
 		var entry autostart.Entry
 		if entry, err = autostart.TrayEntry(); err == nil {
-			err = autostart.Enable(entry)
+			err = autostart.EnableFor(a.opt.Version, entry)
 		}
 	}
 	if err != nil {
 		log.Printf("start at login: %v", err)
+		// A menu checkmark can't show why nothing was written, so the item says it instead of
+		// flipping back silently.
+		if errors.Is(err, autostart.ErrDevBuild) {
+			a.login.SetTitle("Start at Login Needs an Installed Build")
+		}
 	}
 	setCheck(a.login, autostart.Enabled())
+}
+
+func (a *app) skippedVersion() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.cfg.SkippedVersion
 }
 
 func (a *app) refreshLoop() {
@@ -525,6 +537,15 @@ func (a *app) checkForUpdates(manual bool) {
 		log.Printf("update check: %v", err)
 		if manual {
 			a.checkUpdate.SetTitle("Update Check Failed — Try Again")
+		}
+		return
+	}
+	// A skipped release never gets announced or installed in the background. Asking for a check
+	// by hand still shows it, so the skip can be acted on deliberately.
+	if update.IsSkipped(info.Latest, a.skippedVersion()) {
+		if manual {
+			a.checkUpdate.SetTitle("v" + info.Latest + " Skipped — Release Notes")
+			_ = browser.Open(info.URL)
 		}
 		return
 	}

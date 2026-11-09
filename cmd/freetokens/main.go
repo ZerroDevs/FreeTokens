@@ -49,10 +49,12 @@ Usage:
   freetokens diagnose               Print setup diagnostics (never prints tokens)
   freetokens update [--check] [--json] [--scheduled]
                                     Check GitHub Releases and install a verified newer version
-  freetokens config [get | set <key> <value>]
+  freetokens config [get | reset | set <key> <value>]
                                     Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false),
-                                    theme (dark|light|system)
+                                    theme (dark|light|system), skipped-version
   freetokens autostart [on|off]     Start FreeTokens at login
+  freetokens launcher [install|remove]
+                                    Add or remove the Linux app-menu entry
   freetokens version
 
 Environment:
@@ -100,6 +102,8 @@ func main() {
 		err = runConfig(args)
 	case "autostart":
 		err = runAutostart(args)
+	case "launcher":
+		err = runLauncher(args)
 	case "version", "--version", "-v":
 		fmt.Printf("freetokens %s (%s, %s) %s/%s\n", version, commit, date, runtime.GOOS, runtime.GOARCH)
 	case "help", "--help", "-h":
@@ -255,7 +259,7 @@ func runDiagnose() error {
 type updateResult struct {
 	*update.Info
 	Installed bool `json:"installed"`
-	// Skipped is "off" or "not-due" when a --scheduled check didn't run.
+	// Skipped is "off", "not-due" or "version" when a --scheduled check didn't install anything.
 	Skipped string `json:"skipped,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
@@ -283,6 +287,9 @@ func runUpdate(args []string) error {
 			return nil
 		case "not-due":
 			fmt.Println("Scheduled update check skipped (the daily check is not due yet).")
+			return nil
+		case "version":
+			fmt.Println("Scheduled update check skipped (this version was skipped).")
 			return nil
 		}
 		if res.Latest == "" {
@@ -353,6 +360,7 @@ func runUpdate(args []string) error {
 func updateJSON(ctx context.Context, checkOnly, scheduled bool) updateResult {
 	res := updateResult{Info: &update.Info{Current: update.Normalize(version)}}
 	var store *config.Store
+	var skipped string
 	if scheduled {
 		var err error
 		if store, err = config.DefaultStore(); err != nil {
@@ -369,6 +377,7 @@ func updateJSON(ctx context.Context, checkOnly, scheduled bool) updateResult {
 			return res
 		}
 		checkOnly = c.AutoUpdate != config.UpdateAuto
+		skipped = c.SkippedVersion
 	}
 	info, err := update.Check(ctx, version)
 	if store != nil {
@@ -379,6 +388,13 @@ func updateJSON(ctx context.Context, checkOnly, scheduled bool) updateResult {
 		return res
 	}
 	res.Info = info
+	if update.IsSkipped(info.Latest, skipped) {
+		// The release was skipped, so a scheduled check must not announce or install it. An
+		// explicit `freetokens update` still reports it, which is how the skip gets undone.
+		res.Info.Available = false
+		res.Skipped = "version"
+		return res
+	}
 	if checkOnly || !info.Available {
 		return res
 	}
@@ -400,8 +416,17 @@ func runConfig(args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(store.Load())
 	}
+	if args[0] == "reset" {
+		// Everyone's escape hatch for a stuck skip, a bad theme or a hand-edited file: write the
+		// shipped defaults back instead of asking the user to hunt for config.json.
+		if _, err := store.Update(func(c *config.Config) { *c = config.Defaults() }); err != nil {
+			return err
+		}
+		fmt.Println("Settings reset to defaults. A running tray picks up changes after restart.")
+		return nil
+	}
 	if args[0] != "set" || len(args) != 3 {
-		return errors.New("usage: freetokens config set <auto-update|refresh-minutes|show-timers|theme> <value>")
+		return errors.New("usage: freetokens config get | reset | set <auto-update|refresh-minutes|show-timers|theme|skipped-version> <value>")
 	}
 	key, val := args[1], strings.ToLower(args[2])
 	var setErr error
@@ -437,6 +462,9 @@ func runConfig(args []string) error {
 			default:
 				setErr = errors.New("theme must be dark, light or system")
 			}
+		case "skipped-version", "skippedVersion":
+			// An empty value clears the skip, which is the escape hatch when no UI is available.
+			c.SkippedVersion = update.Normalize(val)
 		default:
 			setErr = fmt.Errorf("unknown key %q", key)
 		}
@@ -462,7 +490,7 @@ func runAutostart(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := autostart.Enable(entry); err != nil {
+		if err := autostart.EnableFor(version, entry); err != nil {
 			return err
 		}
 		fmt.Printf("FreeTokens will start at login: %s\n", strings.Join(entry.Exec, " "))
@@ -471,6 +499,39 @@ func runAutostart(args []string) error {
 		return autostart.Disable()
 	}
 	return errors.New("usage: freetokens autostart [on|off]")
+}
+
+// runLauncher manages the Linux app-menu entry. The other platforms get their shortcut from the
+// installer or the app bundle, which the stubs report.
+func runLauncher(args []string) error {
+	if len(args) == 0 {
+		path, err := autostart.LauncherPath()
+		if err != nil {
+			return err
+		}
+		state := "not installed"
+		if autostart.LauncherInstalled() {
+			state = "installed"
+		}
+		fmt.Printf("App-menu entry %s: %s\n", state, path)
+		return nil
+	}
+	switch args[0] {
+	case "install":
+		if err := autostart.InstallLauncher(version); err != nil {
+			return err
+		}
+		path, _ := autostart.LauncherPath()
+		fmt.Printf("Added FreeTokens to the app menu: %s\n", path)
+		return nil
+	case "remove":
+		if err := autostart.RemoveLauncher(); err != nil {
+			return err
+		}
+		fmt.Println("Removed the FreeTokens app-menu entry.")
+		return nil
+	}
+	return errors.New("usage: freetokens launcher [install|remove]")
 }
 
 func runTray() error { return runDesktop(frontendTray) }

@@ -123,6 +123,11 @@ installs it on Windows 10). The Linux popover is a cgo build against GTK 3 and W
 Linux/BSD CLI and classic tray stay pure Go. The tray needs a desktop with StatusNotifierItem
 support: KDE, or GNOME with the AppIndicator extension, Xfce, Cinnamon, and others.
 
+On Linux, `freetokens launcher install` adds a **FreeTokens** entry to your app menu
+(`~/.local/share/applications`, or under `XDG_DATA_HOME`) with a generated icon, so it starts from
+the menu instead of a terminal; `freetokens launcher remove` takes it out again. The BSDs have no
+standard menu entry, so nothing is written there.
+
 A Linux AppImage works too: **Start at Login** points the autostart entry at the `.AppImage` file
 rather than at the temporary mount it runs from, and updating hands off to the Releases page,
 because an AppImage's read-only mount can't be replaced while it runs.
@@ -196,6 +201,7 @@ freetokens            # popover when a desktop session exists, otherwise a statu
 freetokens tray       # classic tray / menu bar menu
 freetokens status     # one-off report; --json for scripts
 freetokens autostart on   # on Windows this registers freetokensw.exe
+freetokens launcher install   # Linux: add an app-menu entry
 ```
 
 ```text
@@ -295,8 +301,9 @@ lists, are shown as **OpenCode Zen**.
 ## Updates (opt-in)
 
 FreeTokens never contacts GitHub unless you ask it to. In the macOS app, use **Settings →
-Updates**. In the Windows popover, **Settings → Updates** checks for a newer release and links to
-it without installing anything. The classic tray keeps the automatic options under **Settings →
+Updates**. The Windows popover's **Settings → Updates** checks for a newer release, links to it
+without installing anything, sets the same policy as the tray menu, and can skip a version so it
+isn't announced again. The classic tray keeps the automatic options under **Settings →
 Updates from GitHub Releases**:
 
 - **Never Check** (default)
@@ -306,7 +313,8 @@ Updates from GitHub Releases**:
 Or from the CLI:
 
 ```bash
-freetokens config set auto-update notify   # off | notify | auto
+freetokens config set auto-update notify      # off | notify | auto
+freetokens config set skipped-version 0.2.0   # empty clears the skip
 freetokens update --check
 freetokens update
 ```
@@ -325,10 +333,14 @@ somewhere you can't write, such as a system directory, update it the way you ins
 | Diagnostics | `freetokens diagnose` prints paths, auth state and numeric quota fields, never tokens |
 
 The popover's **Settings** panel holds the refresh interval, **Start at login**, the panel theme
-(dark by default, light, or **System** to follow the OS appearance), and **Copy status**, which puts
-the `freetokens status` report on the clipboard for a bug report. The interval and theme also work
-from the command line: `freetokens config set refresh-minutes 15` and
-`freetokens config set theme system`.
+(dark by default, light, or **System** to follow the OS appearance), the update policy with
+**Skip this version**, and **Copy status**, which puts the `freetokens status` report on the
+clipboard for a bug report. The macOS app's **Settings** has the same **Appearance** choice and
+reads it from the same `theme` key, so one setting covers both. The interval and theme also work
+from the command line:
+`freetokens config set refresh-minutes 15` and `freetokens config set theme system`.
+`freetokens config reset` puts every key back to its shipped default, which is the quick way out
+of a stuck update skip or a hand-edited file.
 
 ## Privacy
 

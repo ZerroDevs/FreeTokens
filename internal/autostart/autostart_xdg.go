@@ -23,20 +23,11 @@ func Enabled() bool {
 	return err == nil
 }
 
-// quote follows the Desktop Entry spec's Exec quoting rules.
-func quote(arg string) string {
-	if arg != "" && !strings.ContainsAny(arg, " \t\n\"'\\><~|&;$*?#()`%") {
-		return arg
-	}
-	r := strings.NewReplacer(`\`, `\\\\`, `"`, `\\"`, "`", "\\\\`", `$`, `\\$`, `%`, `%%`)
-	return `"` + r.Replace(arg) + `"`
-}
-
 // Enable writes the XDG autostart entry.
 func Enable(e Entry) error {
 	parts := make([]string, len(e.Exec))
 	for i, a := range e.Exec {
-		parts[i] = quote(a)
+		parts[i] = desktopQuote(a)
 	}
 	entry := "[Desktop Entry]\nType=Application\nName=FreeTokens\nComment=Freebuff usage tracker\n" +
 		"Exec=" + strings.Join(parts, " ") + "\nX-GNOME-Autostart-enabled=true\nTerminal=false\n"

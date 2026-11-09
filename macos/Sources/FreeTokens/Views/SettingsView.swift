@@ -23,6 +23,16 @@ struct SettingsView: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                RowDivider()
+                row("Appearance") {
+                    Picker("Appearance", selection: Binding(get: { model.settings.theme }, set: { model.setTheme($0) })) {
+                        Text("System").tag("system")
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
             group("Updates") {
                 row("GitHub Releases") {

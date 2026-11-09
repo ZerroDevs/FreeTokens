@@ -1,4 +1,4 @@
-import type { Preferences, Snapshot, Theme, UpdateStatus } from "./types";
+import type { AutoUpdate, Preferences, Snapshot, Theme, UpdateStatus } from "./types";
 import { demoSnapshot } from "./demo";
 
 interface Bridge {
@@ -10,6 +10,8 @@ interface Bridge {
   SetStartAtLogin(on: boolean): Promise<void>;
   SetTheme(theme: Theme): Promise<void>;
   SetShowTimers(on: boolean): Promise<void>;
+  SetAutoUpdate(policy: AutoUpdate): Promise<void>;
+  SetSkippedVersion(version: string): Promise<void>;
   CheckForUpdates(): Promise<UpdateStatus>;
   OpenReleases(): Promise<void>;
   StatusText(): Promise<string>;

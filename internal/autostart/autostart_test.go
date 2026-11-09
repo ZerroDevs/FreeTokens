@@ -1,6 +1,7 @@
 package autostart
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,5 +36,18 @@ func TestTrayEntryNormalInstall(t *testing.T) {
 	}
 	if len(entry.Exec) != 2 || !filepath.IsAbs(entry.Exec[0]) || entry.Exec[1] != "gui" {
 		t.Fatalf("got %v, want an absolute executable and the gui argument", entry.Exec)
+	}
+}
+
+// A development build runs from Go's build cache, so a login item naming it stops working after
+// the next clean build. EnableFor has to refuse before touching the OS, or the toggle looks broken.
+func TestEnableForRefusesDevelopmentBuild(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	if err := EnableFor("dev", Entry{Exec: []string{"/bin/true"}}); !errors.Is(err, ErrDevBuild) {
+		t.Fatalf("EnableFor(dev) = %v, want ErrDevBuild", err)
+	}
+	if Enabled() {
+		t.Fatal("a refused development build still wrote a login item")
 	}
 }

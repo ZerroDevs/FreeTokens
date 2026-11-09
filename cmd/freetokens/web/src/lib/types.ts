@@ -63,12 +63,16 @@ export interface Snapshot {
 
 export type Theme = "dark" | "light" | "system";
 
+/** Release-check policy: never contact GitHub, tell me, or install verified releases. */
+export type AutoUpdate = "off" | "notify" | "auto";
+
 export interface Preferences {
   refreshMinutes: number;
   startAtLogin: boolean;
   theme: Theme;
   /** False when the user turned session countdowns off. */
   showTimers: boolean;
+  autoUpdate: AutoUpdate;
   version: string;
   platform: string;
   /** True when the window cannot show a transparent margin around the shell. */
@@ -80,6 +84,8 @@ export interface UpdateStatus {
   latest: string;
   available: boolean;
   devBuild: boolean;
+  /** True when latest is the release the user asked not to be told about again. */
+  skipped: boolean;
   url?: string;
 }
 

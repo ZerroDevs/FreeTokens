@@ -296,6 +296,7 @@ type Preferences struct {
 	StartAtLogin   bool   `json:"startAtLogin"`
 	Theme          string `json:"theme"`
 	ShowTimers     bool   `json:"showTimers"`
+	AutoUpdate     string `json:"autoUpdate"`
 	Version        string `json:"version"`
 	Platform       string `json:"platform"`
 	// OpaqueWindow is true when the window has no transparent margin to blend (no compositor).
@@ -309,6 +310,7 @@ func (a *App) GetPreferences() Preferences {
 		StartAtLogin:   autostart.Enabled(),
 		Theme:          cfg.Theme,
 		ShowTimers:     cfg.ShowTimers,
+		AutoUpdate:     cfg.AutoUpdate,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
 		OpaqueWindow:   windowOpaque,
@@ -350,19 +352,34 @@ func (a *App) SetShowTimers(on bool) error {
 }
 
 func (a *App) SetStartAtLogin(on bool) error {
-	if on {
-		// A development build runs from Go's temporary build directory. Registering that path would
-		// disappear at the next login, so the toggle would look like it silently reverted.
-		if !update.IsRelease(a.version) {
-			return errors.New("Start at login needs an installed build. This development build runs from a temporary path, so a login item would stop working after a restart")
-		}
-		entry, err := autostart.TrayEntry()
-		if err != nil {
-			return err
-		}
-		return autostart.Enable(entry)
+	if !on {
+		return autostart.Disable()
 	}
-	return autostart.Disable()
+	entry, err := autostart.TrayEntry()
+	if err != nil {
+		return err
+	}
+	// A development build runs from Go's temporary build directory; EnableFor refuses it rather
+	// than registering a path that disappears at the next login.
+	return autostart.EnableFor(a.version, entry)
+}
+
+// SetAutoUpdate saves the release-check policy the classic tray menu also edits.
+func (a *App) SetAutoUpdate(policy string) error {
+	switch policy {
+	case config.UpdateOff, config.UpdateNotify, config.UpdateAuto:
+	default:
+		return errors.New("automatic updates must be off, notify or auto")
+	}
+	_, err := a.cfg.Update(func(c *config.Config) { c.AutoUpdate = policy })
+	return err
+}
+
+// SetSkippedVersion stops announcements for one release. An empty version clears the skip, which
+// is what the release line offers once a version has been skipped.
+func (a *App) SetSkippedVersion(version string) error {
+	_, err := a.cfg.Update(func(c *config.Config) { c.SkippedVersion = update.Normalize(version) })
+	return err
 }
 
 // StatusText returns the report `freetokens status` prints, so the settings panel can copy it
@@ -383,7 +400,9 @@ type UpdateStatus struct {
 	Latest    string `json:"latest"`
 	Available bool   `json:"available"`
 	DevBuild  bool   `json:"devBuild"`
-	URL       string `json:"url,omitempty"`
+	// Skipped is true when the latest release is the one the user asked not to hear about.
+	Skipped bool   `json:"skipped"`
+	URL     string `json:"url,omitempty"`
 }
 
 func (a *App) CheckForUpdates() (*UpdateStatus, error) {
@@ -393,11 +412,13 @@ func (a *App) CheckForUpdates() (*UpdateStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	skipped := update.IsSkipped(info.Latest, a.cfg.Load().SkippedVersion)
 	return &UpdateStatus{
 		Current:   info.Current,
 		Latest:    info.Latest,
-		Available: info.Available,
+		Available: info.Available && !skipped,
 		DevBuild:  !update.IsRelease(a.version),
+		Skipped:   skipped,
 		URL:       info.URL,
 	}, nil
 }

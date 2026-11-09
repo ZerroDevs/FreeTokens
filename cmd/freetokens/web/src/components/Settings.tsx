@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge, copyText, errorMessage } from "../lib/api";
-import type { Preferences, Theme, UpdateStatus } from "../lib/types";
+import type { AutoUpdate, Preferences, Theme, UpdateStatus } from "../lib/types";
 import { BackIcon, CheckIcon, ExternalIcon } from "./Icons";
 
 type Props = {
@@ -19,6 +19,22 @@ const THEMES: { value: Theme; label: string; note: string }[] = [
   { value: "dark", label: "Dark", note: "Dark theme saved." },
   { value: "light", label: "Light", note: "Light theme saved." },
 ];
+const POLICIES: { value: AutoUpdate; label: string; note: string }[] = [
+  { value: "off", label: "Never", note: "Automatic update checks are off." },
+  { value: "notify", label: "Notify", note: "FreeTokens will check daily and name a new release." },
+  { value: "auto", label: "Install", note: "FreeTokens will check daily and install verified releases." },
+];
+
+function policyHint(policy: AutoUpdate): string {
+  switch (policy) {
+    case "notify":
+      return "Checks once a day and names a new release.";
+    case "auto":
+      return "Checks once a day and installs checksum-verified releases.";
+    default:
+      return "Never contacts GitHub for releases.";
+  }
+}
 
 function versionLabel(version: string): string {
   if (!version || version === "dev" || version === "preview") return "development build";
@@ -42,6 +58,7 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
         startAtLogin: false,
         theme: "dark",
         showTimers: true,
+        autoUpdate: "off",
         version: "preview",
         platform: "browser",
       });
@@ -122,6 +139,49 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
       setSaving(false);
     }
   }, [demo, saving, showTimers, onShowTimers]);
+
+  const savePolicy = useCallback(
+    async (next: AutoUpdate) => {
+      if (!bridge || !prefs || demo || saving || next === prefs.autoUpdate) return;
+      const previous = prefs.autoUpdate;
+      setPrefs({ ...prefs, autoUpdate: next });
+      setSaving(true);
+      setNote(null);
+      try {
+        await bridge.SetAutoUpdate(next);
+        const saved = POLICIES.find((option) => option.value === next);
+        setNote({ kind: "ok", text: saved ? saved.note : "Update policy saved." });
+      } catch (error) {
+        setPrefs((current) => (current ? { ...current, autoUpdate: previous } : current));
+        setNote({ kind: "error", text: errorMessage(error) });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [prefs, demo, saving],
+  );
+
+  const skipUpdate = useCallback(async () => {
+    if (!bridge || !update) return;
+    try {
+      await bridge.SetSkippedVersion(update.latest);
+      setUpdate({ ...update, available: false, skipped: true });
+      setNote({ kind: "ok", text: `${update.latest} won't be announced again.` });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    }
+  }, [update]);
+
+  const unskipUpdate = useCallback(async () => {
+    if (!bridge || !update) return;
+    try {
+      await bridge.SetSkippedVersion("");
+      setUpdate({ ...update, available: true, skipped: false });
+      setNote({ kind: "ok", text: `${update.latest} will be announced again.` });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    }
+  }, [update]);
 
   const checkUpdates = useCallback(async () => {
     if (!bridge) return;
@@ -317,6 +377,34 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
               <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
                 {versionLabel(prefs.version)} · {prefs.platform}
               </p>
+              <div
+                role="group"
+                aria-label="Automatic update checks"
+                className="mt-2 grid grid-cols-3 gap-1"
+              >
+                {POLICIES.map((option) => {
+                  const active = prefs.autoUpdate === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={demo || saving}
+                      onClick={() => void savePolicy(option.value)}
+                      className={`h-[30px] rounded-[8px] text-[10.5px] font-medium transition-colors ${
+                        active
+                          ? "bg-raised text-ink"
+                          : "bg-panel text-muted hover:text-ink disabled:hover:text-muted"
+                      } disabled:opacity-60`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
+                {policyHint(prefs.autoUpdate)} The tray applies this when it next starts.
+              </p>
               <div className="mt-2 flex gap-1.5">
                 <button
                   type="button"
@@ -346,6 +434,24 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
                         className="font-medium text-brand-strong underline underline-offset-2"
                       >
                         Open the release page
+                      </button>{" "}
+                      <button
+                        type="button"
+                        onClick={() => void skipUpdate()}
+                        className="text-muted underline underline-offset-2 hover:text-ink"
+                      >
+                        Skip this version
+                      </button>
+                    </>
+                  ) : update.skipped ? (
+                    <>
+                      {update.latest} is available; you skipped it.{" "}
+                      <button
+                        type="button"
+                        onClick={() => void unskipUpdate()}
+                        className="font-medium text-brand-strong underline underline-offset-2"
+                      >
+                        Show it again
                       </button>
                     </>
                   ) : update.devBuild ? (
