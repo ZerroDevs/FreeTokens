@@ -244,8 +244,8 @@ switches to what is left when clicked. Zero or an empty field turns the line off
 most against the previous window, and an hour-of-week heatmap says when usage happens. Every heatmap
 cell names its weekday, hour and value on hover. Only readers that dated individual turns contribute
 hours, so a store that records only daily totals leaves the heatmap short rather than inventing a
-time. **Usage history** (opt-in, off by default) adds just the 14-day strip and the previous-period
-comparison above the mix.
+time. **Usage history** (opt-in, off by default) adds just the **Last 30 Days** bar card and the
+previous-period comparison, directly under the mix.
 
 **Settings → Usage sources** lists each reader with the inputs it found, when it last read them and
 why a count is short (unreadable files, a failed read, no sign-in), which turns *totals may be
@@ -366,20 +366,26 @@ directory, update it the way you installed it.
 | Caches, tray log | the OS cache directory under `FreeTokens/` (e.g. `~/Library/Caches/FreeTokens`) |
 | Diagnostics | `freetokens diagnose` prints paths, auth state and numeric quota fields, never tokens |
 
-The popover's **Settings** panel holds the refresh interval, **Start at login**, the panel theme
-(dark by default, light, or **System** to follow the OS appearance), the monthly budget, the
-**Menu bar figure** (session countdown, hours left, tokens today, cost today or nothing), the
-usage history and project-grouping switches, the update policy with **Skip this version**, the
-per-source health list, and **Copy status** / **Copy daily CSV** for a bug report or a spreadsheet.
-The macOS app's **Settings** has the same choices, read from the same keys, so one setting covers
-both. They also work from the command line:
+The popover's **Settings** panel is a stack of cards: **General** (start at login, the session
+timer in the menu bar, refresh interval), **Appearance**, the **Menu bar figure** (session
+countdown, hours left, tokens today, cost today or nothing), the monthly budget, **Usage** history
+and project grouping, **Sources**, **Updates** with **Check Now** and **Skip this version**,
+**Report** with **Copy status** / **Copy daily CSV**, and **About**.
+
+**Appearance** ships five themes: **Dark** (the default neutral graphite with a blue accent),
+**Light**, **Sand** (the older warm sepia), **System** to follow the OS appearance, and **Custom**.
+Custom builds the whole palette from four colours — accent, background, card and text — picked with
+a colour well or typed as hex, and every colour in the panel is derived from them. A theme applies
+to the popover only; the tray icon follows the system. The macOS app's **Settings** reads the same
+keys but offers Dark, Light and System, so a Sand or Custom pick shows there as the system
+appearance. They also work from the command line:
 
 ```bash
 freetokens config set refresh-minutes 15
-freetokens config set theme system
+freetokens config set theme system        # dark | light | sand | system | custom
 freetokens config set budget-usd 250          # 0 turns the budget line off
 freetokens config set tray-title tokens       # session | hours | tokens | cost | none
-freetokens config set show-history true       # the 14-day strip, comparison and heatmap
+freetokens config set show-history true       # the 30-day bars and the period comparison, under the mix
 freetokens config set show-projects true      # the Project grouping in the mix
 ```
 `freetokens config reset` puts every key back to its shipped default, which is the quick way out

@@ -32,8 +32,8 @@ export function UsageView({
 }: {
   snapshot: Snapshot;
   now: number;
-  /** Live countdowns, already reduced to the strings the hours card draws. */
-  sessions: string[];
+  /** Live countdowns the hours card draws, with the clock time each session ends. */
+  sessions: { left: string; ends: string }[];
   showTimers: boolean;
   showHistory: boolean;
   showProjects: boolean;
@@ -88,20 +88,6 @@ export function UsageView({
           <div className="mt-3">
             <PeriodTabs periods={periods} selected={safeSelection} onSelect={onSelect} />
           </div>
-          {/* The strip and the scalar comparison stay opt-in, as asked. */}
-          {showHistory ? (
-            <>
-              {period ? (
-                <PeriodComparison
-                  label={period.label}
-                  days={snapshot.days ?? []}
-                  now={now}
-                  mode={mode}
-                />
-              ) : null}
-              <HistoryStrip days={snapshot.days ?? []} mode={mode} now={now} />
-            </>
-          ) : null}
           {period ? (
             <UsageSection
               period={period}
@@ -112,6 +98,20 @@ export function UsageView({
               monthlyCost={monthly?.costUsd}
               monthlyCostLowerBound={monthly?.costLowerBound ?? false}
               showProjects={showProjects}
+              // The strip and the comparison stay opt-in, and they sit under the mix when enabled.
+              history={
+                showHistory ? (
+                  <>
+                    <HistoryStrip days={snapshot.days ?? []} mode={mode} now={now} />
+                    <PeriodComparison
+                      label={period.label}
+                      days={snapshot.days ?? []}
+                      now={now}
+                      mode={mode}
+                    />
+                  </>
+                ) : null
+              }
             />
           ) : null}
           {/* Movers and the hour grid are not the optional history views, so they keep their own

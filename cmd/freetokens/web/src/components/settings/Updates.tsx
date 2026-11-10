@@ -5,14 +5,14 @@ import { plainNotes } from "../../lib/notes";
 import type { AutoUpdate, Preferences, UpdateStatus } from "../../lib/types";
 import { ExternalIcon } from "../Icons";
 import { useFeedback } from "./feedback";
-import { ChoiceGrid, SettingsSection } from "./parts";
+import { SettingRow, SettingsCard, SettingsSection, SettingsSelect } from "./parts";
 
 const POLICIES: { value: AutoUpdate; label: string; note: string }[] = [
-  { value: "off", label: "Never", note: "Automatic update checks are off." },
-  { value: "notify", label: "Notify", note: "FreeTokens will check daily and name a new release." },
+  { value: "off", label: "Never Check", note: "Automatic update checks are off." },
+  { value: "notify", label: "Check Daily", note: "FreeTokens will check daily and name a new release." },
   {
     value: "auto",
-    label: "Auto-install",
+    label: "Install Automatically",
     note: "FreeTokens will check daily and install verified releases.",
   },
 ];
@@ -24,7 +24,7 @@ function policyHint(policy: AutoUpdate): string {
     case "auto":
       return "Checks once a day and installs checksum-verified releases.";
     default:
-      return "Never contacts GitHub for releases.";
+      return "FreeTokens never contacts GitHub unless you ask.";
   }
 }
 
@@ -102,38 +102,40 @@ export function Updates({
   }, []);
 
   return (
-    <SettingsSection id="updates" title="Updates" hint={`${versionLabel(prefs.version)} · ${prefs.platform}`}>
-      <ChoiceGrid
-        label="Automatic update checks"
-        options={POLICIES}
-        value={prefs.autoUpdate}
-        columns={3}
-        disabled={demo || saving}
-        onSelect={savePolicy}
-      />
-      <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
-        {policyHint(prefs.autoUpdate)} The tray applies this when it next starts.
-      </p>
-      <div className="mt-2 flex gap-1.5">
-        <button
-          type="button"
-          disabled={demo || checking}
-          onClick={() => void checkUpdates()}
-          className="h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
-        >
-          {checking ? "Checking…" : "Check for updates"}
-        </button>
+    <SettingsSection id="updates" title="Updates">
+      <SettingsCard>
+        <SettingRow label="GitHub Releases" htmlFor="update-policy">
+          <SettingsSelect
+            id="update-policy"
+            label="Automatic update checks"
+            value={prefs.autoUpdate}
+            options={POLICIES}
+            disabled={demo || saving}
+            onChange={savePolicy}
+          />
+        </SettingRow>
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <p className="min-w-0 text-[10.5px] leading-snug text-faint">{policyHint(prefs.autoUpdate)}</p>
+          <button
+            type="button"
+            disabled={demo || checking}
+            onClick={() => void checkUpdates()}
+            className="h-[26px] shrink-0 rounded-[7px] border border-line bg-raised px-2.5 text-[10.5px] font-medium text-ink transition-colors hover:bg-raised-hover disabled:opacity-60"
+          >
+            {checking ? "Checking…" : "Check Now"}
+          </button>
+        </div>
         <button
           type="button"
           onClick={openReleases}
-          className="flex h-[30px] items-center gap-1 rounded-[8px] px-2 text-[10.5px] font-medium text-muted transition-colors hover:text-ink"
+          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[11px] font-medium text-brand-strong transition-colors hover:bg-raised"
         >
-          Releases
+          Release notes
           <ExternalIcon className="h-3 w-3" />
         </button>
-      </div>
+      </SettingsCard>
       {update ? (
-        <p className="mt-2 text-[11px] leading-snug text-muted">
+        <p className="mt-2 px-1 text-[11px] leading-snug text-muted">
           {update.available ? (
             <>
               {update.latest} is available.{" "}
@@ -181,12 +183,12 @@ export function Updates({
         </details>
       ) : null}
       {updateError ? (
-        <p role="alert" className="mt-2 text-[11px] leading-snug text-warn">
+        <p role="alert" className="mt-2 px-1 text-[11px] leading-snug text-warn">
           {updateError}
         </p>
       ) : null}
       {demo ? (
-        <p className="mt-2 text-[10.5px] leading-snug text-faint">
+        <p className="mt-2 px-1 text-[10.5px] leading-snug text-faint">
           These controls work in the desktop app.
         </p>
       ) : null}

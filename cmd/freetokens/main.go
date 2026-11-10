@@ -506,10 +506,10 @@ func runConfig(args []string) error {
 			}
 		case "theme":
 			switch val {
-			case config.ThemeDark, config.ThemeLight, config.ThemeSystem:
+			case config.ThemeDark, config.ThemeLight, config.ThemeSystem, config.ThemeSand, config.ThemeCustom:
 				c.Theme = val
 			default:
-				setErr = errors.New("theme must be dark, light or system")
+				setErr = errors.New("theme must be dark, light, system, sand or custom")
 			}
 		case "budget-usd", "budgetUsd":
 			var v float64

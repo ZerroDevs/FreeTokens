@@ -110,7 +110,15 @@ export interface Snapshot {
   sourceNote?: string;
 }
 
-export type Theme = "dark" | "light" | "system";
+export type Theme = "dark" | "light" | "system" | "sand" | "custom";
+
+/** The four colours a custom theme is built from. */
+export interface ThemeColors {
+  accent?: string;
+  background?: string;
+  card?: string;
+  text?: string;
+}
 
 /** Release-check policy: never contact GitHub, tell me, or install verified releases. */
 export type AutoUpdate = "off" | "notify" | "auto";
@@ -119,6 +127,8 @@ export interface Preferences {
   refreshMinutes: number;
   startAtLogin: boolean;
   theme: Theme;
+  /** The colours behind a custom theme; ignored by the presets. */
+  themeColors?: ThemeColors;
   /** False when the user turned session countdowns off. */
   showTimers: boolean;
   showHistory: boolean;

@@ -1,8 +1,9 @@
 import { bridge } from "../../lib/api";
 import type { Preferences } from "../../lib/types";
 import { useFeedback } from "./feedback";
-import { SwitchSection } from "./parts";
+import { SettingRow, SettingsSwitch } from "./parts";
 
+/** One row of the General card: adds the tray icon to the login items. */
 export function LoginItem({
   prefs,
   demo,
@@ -30,14 +31,15 @@ export function LoginItem({
     });
   };
 
+  const label = prefs.platform === "windows" ? "Start with Windows" : "Start at Login";
   return (
-    <SwitchSection
-      id="login"
-      title={prefs.platform === "windows" ? "Start with Windows" : "Start at login"}
-      hint="Adds the tray icon when you sign in."
-      checked={prefs.startAtLogin}
-      disabled={demo || saving}
-      onToggle={save}
-    />
+    <SettingRow label={label}>
+      <SettingsSwitch
+        checked={prefs.startAtLogin}
+        disabled={demo || saving}
+        label={label}
+        onToggle={save}
+      />
+    </SettingRow>
   );
 }

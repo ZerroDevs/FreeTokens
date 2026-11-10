@@ -1,12 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge } from "./api";
-import type { Theme } from "./types";
+import { applyTheme } from "./themes";
+import type { Theme, ThemeColors } from "./types";
 
 // Browser previews have no config file, so the demo remembers the theme locally.
 const THEME_KEY = "freetokens-theme";
+const THEME_COLORS_KEY = "freetokens-theme-colors";
 
 function normalizeTheme(value: string | null | undefined): Theme {
-  return value === "light" || value === "system" ? value : "dark";
+  switch (value) {
+    case "light":
+    case "system":
+    case "sand":
+    case "custom":
+      return value;
+    default:
+      return "dark";
+  }
+}
+
+/** normalizeColors keeps only the four colour fields and only string values. */
+function normalizeColors(value: unknown): ThemeColors {
+  if (!value || typeof value !== "object") return {};
+  const source = value as Record<string, unknown>;
+  const colors: ThemeColors = {};
+  for (const key of ["accent", "background", "card", "text"] as const) {
+    const field = source[key];
+    if (typeof field === "string" && field !== "") colors[key] = field;
+  }
+  return colors;
 }
 
 function storedTheme(): Theme {
@@ -17,12 +39,21 @@ function storedTheme(): Theme {
   }
 }
 
+function storedColors(): ThemeColors {
+  try {
+    return normalizeColors(JSON.parse(localStorage.getItem(THEME_COLORS_KEY) ?? "{}"));
+  } catch {
+    return {};
+  }
+}
+
 /**
  * The panel's copy of the settings the tray also writes. Each setter applies the value first and
  * puts it back if the bridge rejects it, so a control never shows a state the engine refused.
  */
 export function usePreferences() {
   const [theme, setTheme] = useState<Theme>(() => (bridge ? "dark" : storedTheme()));
+  const [themeColors, setThemeColors] = useState<ThemeColors>(() => (bridge ? {} : storedColors()));
   const [opaque, setOpaque] = useState(false);
   const [showTimers, setShowTimers] = useState(true);
   // Off by default: the popover leads with the selected period, and the strip is opt-in from
@@ -39,6 +70,7 @@ export function usePreferences() {
       .GetPreferences()
       .then((prefs) => {
         setTheme(normalizeTheme(prefs.theme));
+        setThemeColors(normalizeColors(prefs.themeColors));
         setOpaque(prefs.opaqueWindow === true);
         setShowTimers(prefs.showTimers !== false);
         setShowHistory(prefs.showHistory === true);
@@ -72,18 +104,15 @@ export function usePreferences() {
     document.documentElement.dataset.opaque = opaque ? "true" : "false";
   }, [opaque]);
 
-  // "system" is resolved here rather than in CSS so the document has one concrete palette and
-  // color-scheme follows it; an OS change while the popover is open re-applies it.
+  // Every colour is a CSS variable written here, so presets and custom palettes take the same path.
+  // "system" resolves inside applyTheme, and an OS change while the popover is open re-applies it.
   useEffect(() => {
     const query = window.matchMedia("(prefers-color-scheme: light)");
-    const apply = () => {
-      const resolved = theme === "system" ? (query.matches ? "light" : "dark") : theme;
-      document.documentElement.dataset.theme = resolved;
-    };
+    const apply = () => applyTheme(theme, themeColors, document.documentElement);
     apply();
     query.addEventListener("change", apply);
     return () => query.removeEventListener("change", apply);
-  }, [theme]);
+  }, [theme, themeColors]);
 
   const changeTheme = useCallback(
     async (next: Theme) => {
@@ -101,6 +130,29 @@ export function usePreferences() {
       }
     },
     [theme],
+  );
+
+  const changeThemeColors = useCallback(
+    async (next: ThemeColors) => {
+      const previous = themeColors;
+      const previousTheme = theme;
+      setThemeColors(next);
+      setTheme("custom");
+      try {
+        if (bridge) {
+          await bridge.SetThemeColors(next);
+          await bridge.SetTheme("custom");
+        } else {
+          localStorage.setItem(THEME_COLORS_KEY, JSON.stringify(next));
+          localStorage.setItem(THEME_KEY, "custom");
+        }
+      } catch (error) {
+        setThemeColors(previous);
+        setTheme(previousTheme);
+        throw error;
+      }
+    },
+    [theme, themeColors],
   );
 
   const changeShowTimers = useCallback(
@@ -162,6 +214,8 @@ export function usePreferences() {
   return {
     theme,
     changeTheme,
+    themeColors,
+    changeThemeColors,
     showTimers,
     changeShowTimers,
     showHistory,

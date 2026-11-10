@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { copyText } from "../lib/api";
 import { OTHER_COLOR } from "../lib/colors";
 import { formatMoney, formatTokens, formatUsd, formatUsdCompact, percent, share } from "../lib/format";
@@ -28,6 +28,8 @@ type Props = {
   monthlyCostLowerBound?: boolean;
   /** Reveals the project grouping, which only some readers can populate. */
   showProjects?: boolean;
+  /** The opt-in history views, drawn directly under the mix so they read as its continuation. */
+  history?: ReactNode;
 };
 
 type LegendRow = UsageRow & { value: number };
@@ -77,6 +79,7 @@ export function UsageSection({
   monthlyCost,
   monthlyCostLowerBound = false,
   showProjects = false,
+  history = null,
 }: Props) {
   const [grouping, setGrouping] = useState<Grouping>("tool");
   // Splits the ring into token kinds instead of models. Costs are rates per token kind, not
@@ -87,6 +90,8 @@ export function UsageSection({
   // The mix is the tallest block in the panel; folding it leaves the tabs and strip visible.
   const [open, setOpen] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // The menu opens upward when the section header sits near the footer, so no option is cut off.
+  const [optionsUp, setOptionsUp] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -191,7 +196,9 @@ export function UsageSection({
       ? "Provider mix"
       : activeGrouping === "project"
         ? "Project mix"
-        : "Model mix";
+        : mode === "cost"
+          ? "Estimated Cost"
+          : "Estimated Tokens";
   const unitName = kindsView ? "kinds" : activeGrouping === "provider" ? "providers" : activeGrouping === "project" ? "projects" : "models";
   const totalDetail = [
     period.label,
@@ -201,6 +208,14 @@ export function UsageSection({
   // Budget remaining is a money figure even in token mode, so the hole says what it is.
   const shownValue = onBudgetHole && activeRow === null ? (budgetOver ? formatMoney((monthlyCost ?? 0) - budget) : formatUsdCompact(budgetRemaining)) : centerValue;
   const shownLabel = onBudgetHole && activeRow === null ? (budgetOver ? "over budget" : `of ${formatMoney(budget)}`) : centerLabel;
+  // The figure under the ring repeats the unit the hole is not showing, so both totals stay on the
+  // card the way the app shows them.
+  const totalCaption =
+    mode === "cost"
+      ? `${formatTokens(period.tokens)} tokens`
+      : period.costUsd != null
+        ? `${formatUsd(period.costUsd, period.costLowerBound)} est. cost`
+        : null;
 
   // The menu and the note are both small popovers; either one closes on a click away or Escape.
   useEffect(() => {
@@ -267,7 +282,11 @@ export function UsageSection({
                 aria-haspopup="true"
                 aria-label={`Show as ${mode === "tokens" ? "tokens" : "cost"}. Change values or grouping`}
                 title="Values and grouping"
-                onClick={() => setOptionsOpen((value) => !value)}
+                onClick={() => {
+                  const box = optionsRef.current?.getBoundingClientRect();
+                  if (box) setOptionsUp(window.innerHeight - box.bottom < 240);
+                  setOptionsOpen((value) => !value);
+                }}
                 className={`flex h-[22px] items-center gap-0.5 rounded-[6px] pr-1 pl-1.5 text-[11.5px] font-medium transition-colors ${
                   optionsOpen ? "bg-raised text-ink" : "text-ink hover:bg-raised"
                 }`}
@@ -283,7 +302,9 @@ export function UsageSection({
                 <div
                   role="group"
                   aria-label="Values and grouping"
-                  className="absolute top-full left-0 z-30 mt-1 w-[184px] rounded-[10px] border border-line bg-raised p-1.5 shadow-popover"
+                  className={`absolute left-0 z-30 w-[184px] rounded-[10px] border border-line bg-raised p-1.5 shadow-popover ${
+                    optionsUp ? "bottom-full mb-1" : "top-full mt-1"
+                  }`}
                 >
                   <p className="px-1 pb-1 text-[10px] font-medium text-faint">Values</p>
                   <div className="grid grid-cols-2 gap-1">
@@ -527,15 +548,13 @@ export function UsageSection({
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: row.color }}
                         />
-                        <span
-                          className={`min-w-0 flex-1 truncate text-[11.5px] transition-colors ${
-                            rowActive ? "text-ink" : "text-muted"
-                          }`}
-                        >
-                          {row.name}
-                        </span>
-                        <span className="shrink-0 text-[11.5px] font-semibold text-ink tnum">
-                          {rowText(row, mode)}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px] leading-tight font-semibold text-ink">
+                            {row.name}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] leading-tight text-muted tnum">
+                            {rowText(row, mode)}
+                          </span>
                         </span>
                         <span className="sr-only">{rowDetail(row, mode, viewTotal)}</span>
                         <span
@@ -563,6 +582,10 @@ export function UsageSection({
                 </div>
               ) : null}
             </div>
+            {totalCaption ? (
+              <p className="mt-2.5 text-center text-[11.5px] text-muted tnum">{totalCaption}</p>
+            ) : null}
+            {history}
             {kindsView && cacheHit != null ? (
               <p className="mt-2 text-[10.5px] leading-snug text-faint">
                 Cache hit {percent(cacheHit, 1)} · {formatTokens(kinds?.cacheRead ?? 0)} of{" "}

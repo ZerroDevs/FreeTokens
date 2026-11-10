@@ -1,7 +1,7 @@
 import { useFeedback } from "./feedback";
-import { SwitchSection } from "./parts";
+import { SettingRow, SettingsSwitch } from "./parts";
 
-// Demo mode still toggles, so the preview can show both states; only a real run persists it.
+/** One row of the Usage card: the 30-day bars and the previous-period comparison under the mix. */
 export function UsageHistory({
   on,
   onShow,
@@ -21,13 +21,8 @@ export function UsageHistory({
   };
 
   return (
-    <SwitchSection
-      id="history"
-      title="Usage history"
-      hint="Shows the 14-day strip and the previous-period comparison above the model mix. The movers and the hour grid always show."
-      checked={on}
-      disabled={saving}
-      onToggle={save}
-    />
+    <SettingRow label="Usage History" hint="The 30-day bars and the period comparison, under the mix.">
+      <SettingsSwitch checked={on} disabled={saving} label="Usage History" onToggle={save} />
+    </SettingRow>
   );
 }

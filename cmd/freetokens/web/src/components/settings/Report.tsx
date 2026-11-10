@@ -3,10 +3,10 @@ import { bridge, copyText } from "../../lib/api";
 import { toCsv } from "../../lib/days";
 import type { Day } from "../../lib/types";
 import { useFeedback } from "./feedback";
-import { SettingsSection } from "./parts";
+import { SettingsCard, SettingsSection } from "./parts";
 
 const BUTTON =
-  "h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60";
+  "h-[28px] rounded-[7px] bg-raised px-2.5 text-[10.5px] font-medium text-ink transition-colors hover:bg-raised-hover disabled:opacity-60";
 
 export function Report({
   demo,
@@ -52,18 +52,20 @@ export function Report({
       title="Report"
       hint="Copies the same text `freetokens status` prints, for a bug report."
     >
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <button type="button" disabled={demo || copying} onClick={copyStatus} className={BUTTON}>
-          {copying ? "Copying…" : "Copy status"}
-        </button>
-        <button type="button" disabled={exporting} onClick={exportCsv} className={BUTTON}>
-          {exporting ? "Copying…" : "Copy daily CSV"}
-        </button>
-      </div>
-      <p className="mt-1.5 text-[10px] leading-snug text-faint">
-        The CSV is one row per local day with tokens, estimated cost and whether either was complete.{" "}
-        <code>freetokens export --csv</code> prints the same rows.
-      </p>
+      <SettingsCard>
+        <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
+          <button type="button" disabled={demo || copying} onClick={copyStatus} className={BUTTON}>
+            {copying ? "Copying…" : "Copy status"}
+          </button>
+          <button type="button" disabled={exporting} onClick={exportCsv} className={BUTTON}>
+            {exporting ? "Copying…" : "Copy daily CSV"}
+          </button>
+        </div>
+        <p className="px-3 pb-2.5 text-[10px] leading-snug text-faint">
+          The CSV is one row per local day with tokens, estimated cost and whether either was complete.{" "}
+          <code>freetokens export --csv</code> prints the same rows.
+        </p>
+      </SettingsCard>
     </SettingsSection>
   );
 }

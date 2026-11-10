@@ -1,10 +1,11 @@
 import { bridge } from "../../lib/api";
 import type { Preferences } from "../../lib/types";
 import { useFeedback } from "./feedback";
-import { ChoiceGrid, SettingsSection } from "./parts";
+import { SettingRow, SettingsSelect } from "./parts";
 
 const INTERVALS = [1, 5, 15, 30, 60];
 
+/** One row of the General card: how often the tray re-reads usage. */
 export function RefreshInterval({
   prefs,
   demo,
@@ -16,7 +17,8 @@ export function RefreshInterval({
 }) {
   const { saving, run } = useFeedback();
 
-  const save = (minutes: number) =>
+  const save = (minutes: number) => {
+    if (minutes === prefs.refreshMinutes) return;
     void run(async () => {
       const previous = prefs.refreshMinutes;
       onPrefs({ ...prefs, refreshMinutes: minutes });
@@ -28,23 +30,21 @@ export function RefreshInterval({
       }
       return "Refresh interval saved.";
     });
+  };
 
   return (
-    <SettingsSection id="refresh" title="Refresh every" first>
-      <ChoiceGrid
-        label="Refresh interval"
+    <SettingRow label="Refresh Every" htmlFor="refresh-every">
+      <SettingsSelect
+        id="refresh-every"
+        label="Refresh every"
+        value={prefs.refreshMinutes}
         options={INTERVALS.map((minutes) => ({
           value: minutes,
           label: minutes === 60 ? "1 hr" : `${minutes} min`,
         }))}
-        value={prefs.refreshMinutes}
-        columns={5}
         disabled={demo || saving}
-        onSelect={save}
+        onChange={save}
       />
-      <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
-        The background refresh uses the same interval as the tray.
-      </p>
-    </SettingsSection>
+    </SettingRow>
   );
 }

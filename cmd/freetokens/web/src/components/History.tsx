@@ -2,7 +2,7 @@ import { comparePeriod, lastDays, periodWindow, topMovers } from "../lib/days";
 import { formatMoney, formatTokens, formatUsd } from "../lib/format";
 import type { Day, ValueMode } from "../lib/types";
 
-const DAYS = 14;
+const DAYS = 30;
 
 function barValue(value: number, mode: ValueMode): string {
   if (mode === "cost") return formatUsd(value, false);
@@ -10,13 +10,14 @@ function barValue(value: number, mode: ValueMode): string {
 }
 
 /**
- * The last two weeks as bars, scaled to the busiest day. It answers "how is today going" without
+ * The last 30 days as bars, scaled to the busiest day. It answers "how is today going" without
  * opening the account page, which the per-period totals cannot.
  */
 export function HistoryStrip({ days, mode, now }: { days: Day[]; mode: ValueMode; now: number }) {
   const bars = lastDays(days, DAYS, now, mode);
   const peak = Math.max(...bars.map((bar) => bar.value), 0);
   if (peak <= 0) return null;
+  const activeDays = bars.filter((bar) => bar.value > 0).length;
 
   const busiest = bars.reduce((best, bar) => (bar.value > best.value ? bar : best), bars[0]);
   const label = `Daily ${mode === "cost" ? "cost" : "tokens"} for the last ${DAYS} days. Busiest was ${
@@ -24,31 +25,33 @@ export function HistoryStrip({ days, mode, now }: { days: Day[]; mode: ValueMode
   } at ${barValue(busiest.value, mode)}.`;
 
   return (
-    <figure className="mt-3">
-      <figcaption className="text-[10.5px] text-faint">Last {DAYS} days</figcaption>
-      <div role="img" aria-label={label} className="mt-1.5 flex h-11 items-end gap-[3px]">
-        {bars.map((bar, index) => {
-          const share = bar.value / peak;
-          const today = index === bars.length - 1;
-          // One fill class per bar: a zero day shows the track, not a brand-coloured sliver.
-          const fill =
-            bar.value > 0 ? (today ? "bg-brand" : "bg-brand/50") : "bg-track";
-          return (
-            <div key={bar.key} className="flex h-full flex-1 items-end">
-              <div
-                title={`${bar.label}: ${barValue(bar.value, mode)}`}
-                className={`w-full rounded-[2px] ${fill}`}
-                style={{ height: bar.value > 0 ? `${Math.max(share * 100, 4)}%` : "2px" }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] text-faint tnum">
-        <span>{bars[0].label}</span>
-        <span>{bars[bars.length - 1].label}</span>
-      </div>
-    </figure>
+    <section aria-labelledby="history-heading" className="mt-3">
+      <h2 id="history-heading" className="text-[14px] font-semibold text-ink">
+        Last {DAYS} Days
+      </h2>
+      <figure className="mt-2 rounded-[12px] bg-panel px-3 py-2.5">
+        <figcaption className="text-[10.5px] text-muted">
+          {activeDays} active {activeDays === 1 ? "day" : "days"} · hover a bar for details
+        </figcaption>
+        <div role="img" aria-label={label} className="mt-2 flex h-[62px] items-end gap-[3px]">
+          {bars.map((bar, index) => {
+            const share = bar.value / peak;
+            const today = index === bars.length - 1;
+            // One fill class per bar: a zero day shows the track, not a brand-coloured sliver.
+            const fill = bar.value > 0 ? (today ? "bg-brand-strong" : "bg-brand") : "bg-track";
+            return (
+              <div key={bar.key} className="flex h-full flex-1 items-end">
+                <div
+                  title={`${bar.label}: ${barValue(bar.value, mode)}`}
+                  className={`w-full rounded-[2px] ${fill}`}
+                  style={{ height: bar.value > 0 ? `${Math.max(share * 100, 8)}%` : "3px" }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </figure>
+    </section>
   );
 }
 

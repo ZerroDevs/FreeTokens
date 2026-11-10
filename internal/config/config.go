@@ -21,11 +21,29 @@ const (
 )
 
 // Panel themes. The popover ships dark; light and following the OS are opt-in from its settings.
+// Sand is the older warm palette, and Custom is whatever colours the user picked, which are
+// stored beside the choice so the panel can repaint itself on launch.
 const (
 	ThemeDark   = "dark"
 	ThemeLight  = "light"
 	ThemeSystem = "system"
+	ThemeSand   = "sand"
+	ThemeCustom = "custom"
 )
+
+// ThemeColors is the four colours a custom theme is built from; the rest of the palette is derived
+// in the frontend so the user never has to fill in fifteen fields.
+type ThemeColors struct {
+	Accent     string `json:"accent,omitempty"`
+	Background string `json:"background,omitempty"`
+	Card       string `json:"card,omitempty"`
+	Text       string `json:"text,omitempty"`
+}
+
+// IsZero reports whether no colour has been chosen yet.
+func (t ThemeColors) IsZero() bool {
+	return t.Accent == "" && t.Background == "" && t.Card == "" && t.Text == ""
+}
 
 // Menu bar and tray title choices. "session" keeps the countdown the tray has always shown.
 const (
@@ -58,8 +76,11 @@ type Config struct {
 	// ShowProjects reveals the project grouping in the model mix. Off by default because only some
 	// local listeners record which project a run belonged to.
 	ShowProjects bool `json:"showProjects"`
-	// Theme is "dark" (default), "light" or "system" (follow the OS appearance).
+	// Theme is "dark" (default), "light", "system" (follow the OS appearance), "sand" or
+	// "custom".
 	Theme string `json:"theme"`
+	// CustomTheme holds the colours ThemeCustom is built from.
+	CustomTheme ThemeColors `json:"customTheme"`
 	// LastUpdateCheck records the last automatic check.
 	LastUpdateCheck time.Time `json:"lastUpdateCheck,omitempty"`
 	// SkippedVersion suppresses notifications for one release.
@@ -85,10 +106,11 @@ func (c *Config) Normalize() {
 		c.RefreshMinutes = 24 * 60
 	}
 	switch c.Theme {
-	case ThemeDark, ThemeLight, ThemeSystem:
+	case ThemeDark, ThemeLight, ThemeSystem, ThemeSand, ThemeCustom:
 	default:
 		c.Theme = ThemeDark
 	}
+	c.CustomTheme = c.CustomTheme.normalized()
 	switch c.TrayTitle {
 	case TraySession, TrayHours, TrayTokens, TrayCost, TrayNone:
 	default:
@@ -97,6 +119,32 @@ func (c *Config) Normalize() {
 	if math.IsNaN(c.BudgetUSD) || math.IsInf(c.BudgetUSD, 0) || c.BudgetUSD < 0 {
 		c.BudgetUSD = 0
 	}
+}
+
+// normalized drops any colour that is not a hex value, so a hand-edited config cannot paint the
+// panel with garbage or inject CSS.
+func (t ThemeColors) normalized() ThemeColors {
+	return ThemeColors{
+		Accent:     hexColor(t.Accent),
+		Background: hexColor(t.Background),
+		Card:       hexColor(t.Card),
+		Text:       hexColor(t.Text),
+	}
+}
+
+func hexColor(value string) string {
+	if len(value) != 4 && len(value) != 7 {
+		return ""
+	}
+	if value[0] != '#' {
+		return ""
+	}
+	for _, r := range value[1:] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return ""
+		}
+	}
+	return value
 }
 
 // Dir is the FreeTokens config directory (FREETOKENS_CONFIG_DIR overrides it).

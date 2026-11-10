@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatMoney } from "../../lib/format";
 import { useFeedback } from "./feedback";
-import { SettingsSection } from "./parts";
+import { SettingsCard, SettingsSection } from "./parts";
 
 export function Budget({
   budgetUsd,
@@ -33,42 +33,45 @@ export function Budget({
   };
 
   return (
-    <SettingsSection
-      id="budget"
-      title="Monthly budget"
-      hint="Compares the rolling 30-day estimate with a ceiling. Empty turns the line off."
-    >
-      <form
-        className="mt-2 flex items-center gap-1.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save();
-        }}
-      >
-        <label className="flex h-[30px] min-w-0 flex-1 items-center gap-1 rounded-[8px] bg-panel px-2">
-          <span className="text-[11px] text-faint">$</span>
-          <span className="sr-only">Monthly budget in dollars</span>
-          <input
-            value={input}
-            onChange={(event) => {
-              setInput(event.target.value);
-              // The last answer was about the value the user is now replacing.
-              clear();
+    <SettingsSection id="budget" title="Budget">
+      <SettingsCard>
+        <div className="px-3 py-2.5">
+          <p className="text-[12.5px] text-ink">Monthly ceiling</p>
+          <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+            Compares the rolling 30-day estimate with a ceiling. Empty turns the line off.
+          </p>
+          <form
+            className="mt-2 flex items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save();
             }}
-            inputMode="decimal"
-            placeholder="250"
-            disabled={saving}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-ink tnum outline-none placeholder:text-faint disabled:opacity-60"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={saving || input === (budgetUsd > 0 ? String(budgetUsd) : "")}
-          className="h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
-        >
-          Save
-        </button>
-      </form>
+          >
+            <label className="flex h-[28px] min-w-0 flex-1 items-center gap-1 rounded-[7px] bg-raised px-2">
+              <span className="text-[11px] text-faint">$</span>
+              <span className="sr-only">Monthly budget in dollars</span>
+              <input
+                value={input}
+                onChange={(event) => {
+                  setInput(event.target.value);
+                  // The last answer was about the value the user is now replacing.
+                  clear();
+                }}
+                inputMode="decimal"
+                disabled={saving}
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-ink tnum outline-none disabled:opacity-60"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={saving || input === (budgetUsd > 0 ? String(budgetUsd) : "")}
+              className="h-[28px] rounded-[7px] bg-raised px-2.5 text-[10.5px] font-medium text-ink transition-colors hover:bg-raised-hover disabled:opacity-60"
+            >
+              Save
+            </button>
+          </form>
+        </div>
+      </SettingsCard>
     </SettingsSection>
   );
 }

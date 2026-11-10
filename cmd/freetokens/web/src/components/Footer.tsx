@@ -1,50 +1,58 @@
 import { formatAgo } from "../lib/format";
-import type { Snapshot, ValueMode } from "../lib/types";
-import { ExternalIcon } from "./Icons";
+import type { Snapshot } from "../lib/types";
+import { GearIcon, RefreshIcon } from "./Icons";
 
 type Props = {
   snapshot: Snapshot;
   now: number;
-  mode: ValueMode;
-  onOpenDashboard: () => void;
-  // Shown on hover: the header already names the app, so the footer line doesn't repeat it.
+  refreshing: boolean;
+  onRefresh: () => void;
+  onSettings: () => void;
+  // Shown on hover: the brand line is the app, not the version.
   version?: string;
 };
 
-export function Footer({ snapshot, now, mode, onOpenDashboard, version }: Props) {
+/**
+ * The bottom bar: what the panel is and when it last read, with the two actions the popover needs
+ * on every screen — refresh and settings.
+ */
+export function Footer({ snapshot, now, refreshing, onRefresh, onSettings, version }: Props) {
   const partial = (snapshot.periods ?? []).some((period) => period.hasData && period.partial);
 
   return (
     <footer className="shrink-0 border-t border-line/70 px-4 py-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p
-          className="text-[10.5px] text-faint"
-          title={version ? `FreeTokens ${version}` : undefined}
-        >
-          Updated {formatAgo(snapshot.refreshedAt, now)}
-        </p>
-        {mode === "cost" ? (
-          <p
-            className="text-[10.5px] text-faint"
-            title={snapshot.sourceNote ?? "Measured usage at public API rates"}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0" title={version ? `FreeTokens ${version}` : undefined}>
+          <p className="truncate text-[12.5px] font-semibold text-ink">FreeTokens</p>
+          <p className="truncate text-[10.5px] text-faint">Updated {formatAgo(snapshot.refreshedAt, now)}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            aria-label={refreshing ? "Refreshing usage" : "Refresh usage"}
+            aria-busy={refreshing}
+            disabled={refreshing}
+            onClick={onRefresh}
+            className="grid h-8 w-8 place-items-center rounded-[8px] text-muted transition-colors hover:bg-raised hover:text-ink disabled:text-faint"
           >
-            API-rate estimates
-          </p>
-        ) : null}
+            <RefreshIcon className={`h-[17px] w-[17px] ${refreshing ? "motion-safe:animate-spin" : ""}`} />
+          </button>
+          <button
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onSettings}
+            className="grid h-8 w-8 place-items-center rounded-[8px] text-muted transition-colors hover:bg-raised hover:text-ink"
+          >
+            <GearIcon className="h-[17px] w-[17px]" />
+          </button>
+        </div>
       </div>
       {partial ? (
         <p className="mt-1 text-[10.5px] leading-snug text-warn">
           Some runs are missing token counts, so totals are lower bounds.
         </p>
       ) : null}
-      <button
-        type="button"
-        onClick={onOpenDashboard}
-        className="mt-2 flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[9px] bg-raised text-[12px] font-medium text-ink transition-colors hover:bg-raised-hover"
-      >
-        Open Freebuff account
-        <ExternalIcon className="h-3.5 w-3.5 text-muted" />
-      </button>
     </footer>
   );
 }

@@ -1,6 +1,7 @@
 import { useFeedback } from "./feedback";
-import { SwitchSection } from "./parts";
+import { SettingRow, SettingsSwitch } from "./parts";
 
+/** One row of the General card: the session countdown next to the menu bar icon. */
 export function SessionTimer({
   on,
   demo,
@@ -22,13 +23,13 @@ export function SessionTimer({
   };
 
   return (
-    <SwitchSection
-      id="timers"
-      title="Session timer"
-      hint="Shows the active session countdown in the hours card."
-      checked={on}
-      disabled={demo || saving}
-      onToggle={save}
-    />
+    <SettingRow label="Session Timer in Menu Bar">
+      <SettingsSwitch
+        checked={on}
+        disabled={demo || saving}
+        label="Session Timer in Menu Bar"
+        onToggle={save}
+      />
+    </SettingRow>
   );
 }

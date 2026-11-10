@@ -18,6 +18,8 @@ export default function App() {
   const {
     theme,
     changeTheme,
+    themeColors,
+    changeThemeColors,
     showTimers,
     changeShowTimers,
     showHistory,
@@ -41,7 +43,10 @@ export default function App() {
       .map((iso) => Date.parse(iso))
       .filter((at) => !Number.isNaN(at) && at > now)
       .sort((a, b) => a - b)
-      .map((at) => formatDuration(at - now));
+      .map((at) => ({
+        left: formatDuration(at - now),
+        ends: new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+      }));
   }, [snapshot, now]);
 
   const warnings = useMemo(() => {
@@ -118,6 +123,8 @@ export default function App() {
             demo={!isDesktop}
             theme={theme}
             onTheme={changeTheme}
+            themeColors={themeColors}
+            onThemeColors={changeThemeColors}
             showTimers={showTimers}
             onShowTimers={changeShowTimers}
             showHistory={showHistory}
@@ -128,6 +135,8 @@ export default function App() {
             onShowProjects={changeShowProjects}
             sources={snapshot?.sources}
             days={snapshot?.days}
+            refreshedAt={snapshot?.refreshedAt}
+            now={now}
             onBack={() => setSettingsOpen(false)}
             onQuit={quit}
           />
@@ -136,10 +145,8 @@ export default function App() {
             <Header
               plan={snapshot?.quota?.plan}
               demo={!isDesktop}
-              refreshing={refreshing}
               warnings={warnings}
-              onRefresh={() => void refresh()}
-              onSettings={() => setSettingsOpen(true)}
+              onOpenAccount={openDashboard}
             />
 
             {loading && !snapshot ? (
@@ -170,8 +177,9 @@ export default function App() {
               <Footer
                 snapshot={snapshot}
                 now={now}
-                mode={mode}
-                onOpenDashboard={openDashboard}
+                refreshing={refreshing}
+                onRefresh={() => void refresh()}
+                onSettings={() => setSettingsOpen(true)}
                 version={version}
               />
             ) : null}

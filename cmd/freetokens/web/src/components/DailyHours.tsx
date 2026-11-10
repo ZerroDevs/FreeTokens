@@ -1,14 +1,11 @@
-import { useState } from "react";
 import { formatClockHours, formatMoney, formatReset } from "../lib/format";
 import type { Meter, Quota } from "../lib/types";
-import { ChevronDownIcon } from "./Icons";
 
 type Props = {
   quota: Quota;
   now: number;
-  // Session countdowns, already formatted and only the ones still running. They share this card
-  // so a running session costs one row instead of a second panel.
-  sessions: string[];
+  // Live session countdowns and the clock time each one ends.
+  sessions: { left: string; ends: string }[];
 };
 
 function hoursLabel(value: number): string {
@@ -39,7 +36,7 @@ function burnDown(meter: Meter, now: number): string | null {
   const today = new Date(now);
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const clock = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const clock = at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   if (at.toDateString() === today.toDateString()) return `At this pace, runs out around ${clock}`;
   if (at.toDateString() === tomorrow.toDateString()) {
     return `At this pace, runs out tomorrow around ${clock}`;
@@ -47,10 +44,20 @@ function burnDown(meter: Meter, now: number): string | null {
   return "At this pace it runs out before the reset";
 }
 
-export function DailyHours({ quota, now, sessions }: Props) {
-  // Balance and session rows are secondary, so they stay collapsed until asked for.
-  const [showMore, setShowMore] = useState(false);
+/** One labelled row of the hours card: a name on the left, a figure and its note on the right. */
+function Row({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-t border-line/60 pt-2.5">
+      <span className="min-w-0 text-[13px] font-medium text-ink">{label}</span>
+      <span className="min-w-0 text-right">
+        <span className="block text-[13px] font-semibold text-ink tnum">{value}</span>
+        {note ? <span className="mt-0.5 block text-[11px] text-muted tnum">{note}</span> : null}
+      </span>
+    </div>
+  );
+}
 
+export function DailyHours({ quota, now, sessions }: Props) {
   const meter = quota.meters.find((item) => item.label === "Daily Hours") ?? quota.meters[0];
   if (!meter) return null;
 
@@ -80,41 +87,14 @@ export function DailyHours({ quota, now, sessions }: Props) {
   const monthlyMeter = quota.meters.some((item) => item.label === "Monthly Spend");
   const showMonthly = quota.monthlySpendUsd != null && !monthlyMeter;
   const balance = quota.hoursBalance;
+  const hasRows = balance != null || showMonthly || sessions.length > 0;
+  const note = [meter.detail, pace].filter(Boolean).join(" · ");
 
   return (
     <section aria-labelledby="hours-heading" className="rounded-[12px] bg-panel px-3.5 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="hours-heading" className="text-[12px] font-medium text-muted">
-          {meter.label}
-        </h2>
-        <div className="flex items-center gap-1">
-          {reset ? <p className="text-[11px] text-faint tnum">Resets in {reset}</p> : null}
-          {balance != null || showMonthly || sessions.length > 0 ? (
-            <button
-              type="button"
-              aria-expanded={showMore}
-              aria-controls="hours-more"
-              aria-label={
-                showMore ? "Hide hours balance and session" : "Show hours balance and session"
-              }
-              title={showMore ? "Hide hours balance and session" : "Show hours balance and session"}
-              onClick={() => setShowMore((open) => !open)}
-              className="-mr-1.5 grid h-5 w-5 shrink-0 place-items-center rounded-[6px] text-faint transition-colors hover:bg-raised hover:text-ink"
-            >
-              <ChevronDownIcon
-                className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${
-                  showMore ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-1 flex items-baseline justify-between gap-3">
-        <p className="text-[22px] leading-none font-semibold tracking-[-0.02em] text-ink tnum">{lead}</p>
-        <p className="shrink-0 text-[11px] text-faint tnum">{sub}</p>
-      </div>
+      <h2 id="hours-heading" className="text-[14px] font-semibold text-ink">
+        {meter.label}
+      </h2>
 
       <div
         role="progressbar"
@@ -122,8 +102,8 @@ export function DailyHours({ quota, now, sessions }: Props) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(fraction * 100)}
-        aria-valuetext={`${lead}, ${Math.round(fraction * 100)} percent remaining`}
-        className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-track"
+        aria-valuetext={`${lead}, ${sub}, ${Math.round(fraction * 100)} percent remaining`}
+        className="mt-2 h-[5px] overflow-hidden rounded-full bg-track"
       >
         <div
           className={`h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none ${
@@ -133,34 +113,30 @@ export function DailyHours({ quota, now, sessions }: Props) {
         />
       </div>
 
-      {meter.detail ? <p className="mt-1.5 text-[10.5px] text-faint">{meter.detail}</p> : null}
-      {pace ? <p className="mt-1 text-[10.5px] text-faint">{pace}</p> : null}
+      <div className="mt-2 flex items-baseline justify-between gap-3">
+        <p className="text-[13.5px] font-semibold text-ink tnum">{lead}</p>
+        <p className="shrink-0 text-[11.5px] text-muted tnum">
+          {reset ? `Resets in ${reset}` : sub}
+        </p>
+      </div>
 
-      {showMore && (balance != null || showMonthly || sessions.length > 0) ? (
-        <div id="hours-more" className="mt-2.5 space-y-1.5 border-t border-line/70 pt-2.5">
+      {note ? <p className="mt-1 text-[10.5px] leading-snug text-faint">{note}</p> : null}
+
+      {hasRows ? (
+        <div className="mt-2.5 space-y-2.5">
           {balance != null ? (
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12.5px] text-muted">Hours balance</span>
-              <span className="text-[13.5px] font-semibold text-ink tnum">
-                {balance} {balance === 1 ? "hour" : "hours"}
-              </span>
-            </div>
+            <Row label="Hours Balance" value={`${balance} ${balance === 1 ? "hr" : "hrs"}`} note="Separate from the daily pool" />
           ) : null}
           {showMonthly ? (
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12.5px] text-muted">Monthly spend</span>
-              <span className="text-[13.5px] font-semibold text-ink tnum">
-                {formatMoney(quota.monthlySpendUsd ?? 0)}
-              </span>
-            </div>
+            <Row label="Monthly spend" value={formatMoney(quota.monthlySpendUsd ?? 0)} />
           ) : null}
-          {sessions.map((left, index) => (
-            <div key={index} className="flex items-baseline justify-between gap-3">
-              <span className="text-[12.5px] text-muted">
-                {sessions.length === 1 ? "Active session" : `Session ${index + 1}`}
-              </span>
-              <span className="text-[13px] font-semibold text-ink tnum">{left} left</span>
-            </div>
+          {sessions.map((session, index) => (
+            <Row
+              key={index}
+              label={sessions.length === 1 ? "Active Session" : `Active Session ${index + 1}`}
+              value={`${session.left} left`}
+              note={`Ends ${session.ends}`}
+            />
           ))}
         </div>
       ) : null}

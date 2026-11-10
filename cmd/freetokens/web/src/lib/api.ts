@@ -1,14 +1,17 @@
-import type { AutoUpdate, Preferences, Snapshot, Theme, TrayTitle, UpdateStatus } from "./types";
+import type { AutoUpdate, Preferences, Snapshot, Theme, ThemeColors, TrayTitle, UpdateStatus } from "./types";
 import { demoSnapshot } from "./demo";
 
 interface Bridge {
   GetSnapshot(): Promise<Snapshot | null>;
   RefreshNow(): Promise<Snapshot | null>;
   OpenDashboard(): Promise<void>;
+  /** Opens an https link in the system browser (the About card's links). */
+  OpenLink?(url: string): Promise<void>;
   GetPreferences(): Promise<Preferences>;
   SaveRefreshMinutes(minutes: number): Promise<void>;
   SetStartAtLogin(on: boolean): Promise<void>;
   SetTheme(theme: Theme): Promise<void>;
+  SetThemeColors(colors: ThemeColors): Promise<void>;
   SetShowTimers(on: boolean): Promise<void>;
   SetShowHistory(on: boolean): Promise<void>;
   SetBudgetUSD(usd: number): Promise<void>;

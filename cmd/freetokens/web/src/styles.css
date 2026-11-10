@@ -1,34 +1,36 @@
 @import "tailwindcss";
 
+/* These values are the first paint; lib/themes.ts owns the palettes and rewrites every variable
+   on mount, so a theme change never needs a matching CSS edit here. */
 @theme {
-  --color-shell: #161512;
-  --color-panel: #1e1c19;
-  --color-raised: #2a2722;
-  --color-raised-hover: #332f29;
-  --color-line: #3a352e;
-  --color-edge: rgba(255, 255, 255, 0.1);
-  --color-track: #2f2b26;
-  --color-ink: #f2ede6;
-  --color-muted: #b8afa1;
-  --color-faint: #9a9184;
-  --color-brand: #4cc38a;
-  --color-brand-strong: #7ad8a9;
-  --color-hours: #5b9dff;
-  --color-warn: #e8b45c;
-  --color-danger: #f08a72;
-  --color-slate: #9aa3a8;
-  --color-scroll: #453f37;
+  --color-shell: #151517;
+  --color-panel: #242427;
+  --color-raised: #333336;
+  --color-raised-hover: #3d3d40;
+  --color-line: #3a3a3d;
+  --color-edge: rgba(255, 255, 255, 0.08);
+  --color-track: #3a3a3d;
+  --color-ink: #f5f5f7;
+  --color-muted: #b9b9be;
+  --color-faint: #909096;
+  --color-brand: #0a84ff;
+  --color-brand-strong: #4da3ff;
+  --color-hours: #3b82f6;
+  --color-warn: #ff9f0a;
+  --color-danger: #ff453a;
+  --color-slate: #909096;
+  --color-scroll: #4a4a4d;
 
   /* Categorical chart colors. Identity, not brand: every legend row repeats its label. */
-  --color-model-1: #c9a97b;
-  --color-model-2: #34b27f;
-  --color-model-3: #5b9dff;
-  --color-model-4: #ee7458;
-  --color-model-5: #efede8;
-  --color-model-6: #9aa3a8;
-  --color-model-7: #a78bfa;
-  --color-model-8: #e07ab0;
-  --color-model-other: #6f6a61;
+  --color-model-1: #22d3ee;
+  --color-model-2: #3b82f6;
+  --color-model-3: #0a84ff;
+  --color-model-4: #a855f7;
+  --color-model-5: #f5f5f7;
+  --color-model-6: #909096;
+  --color-model-7: #f472b6;
+  --color-model-8: #34d399;
+  --color-model-other: #636366;
 
   --shadow-popover: 0 16px 48px rgba(0, 0, 0, 0.45);
 
@@ -44,35 +46,35 @@ html {
 /* Light is opt-in from the popover's settings; dark above stays the default. */
 html[data-theme="light"] {
   color-scheme: light;
-  --color-shell: #f7f3ec;
-  --color-panel: #efe9df;
-  --color-raised: #e5ddd0;
-  --color-raised-hover: #dcd2c2;
-  --color-line: #d5cabb;
-  --color-edge: rgba(45, 35, 20, 0.12);
-  --color-track: #e2dacd;
-  --color-ink: #221d17;
-  --color-muted: #574e42;
-  --color-faint: #6d6355;
-  --color-brand: #1f8f5f;
-  --color-brand-strong: #14724a;
-  --color-hours: #2f6fd0;
-  --color-warn: #8a5a00;
-  --color-danger: #b23a1e;
-  --color-slate: #55606a;
-  --color-scroll: #cfc5b6;
+  --color-shell: #f2f2f4;
+  --color-panel: #ffffff;
+  --color-raised: #ececef;
+  --color-raised-hover: #e2e2e6;
+  --color-line: #dcdce0;
+  --color-edge: rgba(0, 0, 0, 0.08);
+  --color-track: #e6e6ea;
+  --color-ink: #111114;
+  --color-muted: #55555c;
+  --color-faint: #73737b;
+  --color-brand: #0a84ff;
+  --color-brand-strong: #0066cc;
+  --color-hours: #2563eb;
+  --color-warn: #a35a00;
+  --color-danger: #c22a20;
+  --color-slate: #55555c;
+  --color-scroll: #cfcfd4;
 
-  --color-model-1: #a9762f;
-  --color-model-2: #1f8f5f;
-  --color-model-3: #2f6fd0;
-  --color-model-4: #c9502f;
-  --color-model-5: #6b5f4e;
-  --color-model-6: #5b646b;
-  --color-model-7: #7a5bd6;
-  --color-model-8: #b8448a;
-  --color-model-other: #9c9285;
+  --color-model-1: #0891b2;
+  --color-model-2: #2563eb;
+  --color-model-3: #0a84ff;
+  --color-model-4: #7c3aed;
+  --color-model-5: #4b5563;
+  --color-model-6: #6b7280;
+  --color-model-7: #be185d;
+  --color-model-8: #047857;
+  --color-model-other: #9ca3af;
 
-  --shadow-popover: 0 16px 40px rgba(60, 45, 25, 0.18);
+  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.16);
 }
 
 html,

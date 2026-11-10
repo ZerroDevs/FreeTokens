@@ -1,6 +1,7 @@
 import { useFeedback } from "./feedback";
-import { SwitchSection } from "./parts";
+import { SettingRow, SettingsSwitch } from "./parts";
 
+/** One row of the Usage card: adds a Project view to the mix. */
 export function ProjectGrouping({
   on,
   onShow,
@@ -20,13 +21,8 @@ export function ProjectGrouping({
   };
 
   return (
-    <SwitchSection
-      id="projects"
-      title="Project grouping"
-      hint="Adds a Project view to the mix, from the workspace each run recorded."
-      checked={on}
-      disabled={saving}
-      onToggle={save}
-    />
+    <SettingRow label="Project Grouping" hint="Groups the mix by the workspace each run recorded.">
+      <SettingsSwitch checked={on} disabled={saving} label="Project Grouping" onToggle={save} />
+    </SettingRow>
   );
 }

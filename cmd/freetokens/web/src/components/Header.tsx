@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { CoinMark } from "./CoinMark";
-import { AlertIcon, GearIcon, RefreshIcon } from "./Icons";
+import { AlertIcon, ExternalIcon } from "./Icons";
 
 type Props = {
   plan?: string;
   demo: boolean;
-  refreshing: boolean;
   warnings: string[];
-  onRefresh: () => void;
-  onSettings: () => void;
+  onOpenAccount: () => void;
 };
 
-export function Header({ plan, demo, refreshing, warnings, onRefresh, onSettings }: Props) {
+/**
+ * Names the account being measured and shows its plan, the way the Freebuff app does. Refresh and
+ * settings live in the footer, where the picture puts them.
+ */
+export function Header({ plan, demo, warnings, onOpenAccount }: Props) {
   const [showWarnings, setShowWarnings] = useState(false);
 
   useEffect(() => {
@@ -21,19 +22,18 @@ export function Header({ plan, demo, refreshing, warnings, onRefresh, onSettings
   return (
     <header className="shrink-0 px-4 pt-3.5">
       <div className="flex items-center gap-2">
-        <CoinMark className="h-[19px] w-[19px] shrink-0 text-brand" />
-        <h1 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">FreeTokens</h1>
+        <h1 className="text-[15px] font-bold tracking-[-0.01em] text-ink">Freebuff</h1>
         {plan ? (
           <span
             title="Freebuff plan"
-            className="max-w-[76px] truncate rounded-[6px] bg-raised px-1.5 py-0.5 text-[10.5px] font-medium text-muted"
+            className="max-w-[86px] truncate rounded-full bg-raised px-2 py-0.5 text-[11px] font-medium text-muted"
           >
-            {plan.toLowerCase()}
+            {plan}
           </span>
         ) : null}
         {demo ? (
           <span
-            className="rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-medium text-brand-strong"
+            className="rounded-full px-1.5 py-0.5 text-[10.5px] font-medium text-brand-strong"
             title="Preview data shown because this page is running outside the desktop app"
           >
             Preview data
@@ -53,21 +53,12 @@ export function Header({ plan, demo, refreshing, warnings, onRefresh, onSettings
           ) : null}
           <button
             type="button"
-            aria-label={refreshing ? "Refreshing usage" : "Refresh usage"}
-            aria-busy={refreshing}
-            disabled={refreshing}
-            onClick={onRefresh}
-            className="grid h-8 w-8 place-items-center rounded-[8px] text-muted transition-colors hover:bg-raised hover:text-ink disabled:text-faint"
-          >
-            <RefreshIcon className={`h-4 w-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} />
-          </button>
-          <button
-            type="button"
-            aria-label="Settings"
-            onClick={onSettings}
+            aria-label="Open Freebuff account"
+            title="Open Freebuff account"
+            onClick={onOpenAccount}
             className="grid h-8 w-8 place-items-center rounded-[8px] text-muted transition-colors hover:bg-raised hover:text-ink"
           >
-            <GearIcon className="h-4 w-4" />
+            <ExternalIcon className="h-4 w-4" />
           </button>
         </div>
       </div>

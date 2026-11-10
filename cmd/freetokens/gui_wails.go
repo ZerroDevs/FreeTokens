@@ -304,6 +304,10 @@ func (a *App) RefreshNow() *tracker.Snapshot { return a.refresh(true) }
 
 func (a *App) OpenDashboard() error { return browser.Open(freebuff.DashboardURL) }
 
+// OpenLink opens an https link in the system browser, for the links in the About card. browser.Open
+// rejects anything that is not https.
+func (a *App) OpenLink(url string) error { return browser.Open(url) }
+
 // Preferences holds the settings the popover exposes.
 type Preferences struct {
 	RefreshMinutes int     `json:"refreshMinutes"`
@@ -315,8 +319,11 @@ type Preferences struct {
 	TrayTitle      string  `json:"trayTitle"`
 	ShowProjects   bool    `json:"showProjects"`
 	AutoUpdate     string  `json:"autoUpdate"`
-	Version        string  `json:"version"`
-	Platform       string  `json:"platform"`
+	// ThemeColors are the colours a custom theme is built from, so the panel can paint itself
+	// without asking for them again.
+	ThemeColors config.ThemeColors `json:"themeColors"`
+	Version     string             `json:"version"`
+	Platform    string             `json:"platform"`
 	// OpaqueWindow is true when the window has no transparent margin to blend (no compositor).
 	OpaqueWindow bool `json:"opaqueWindow"`
 }
@@ -333,6 +340,7 @@ func (a *App) GetPreferences() Preferences {
 		TrayTitle:      cfg.TrayTitle,
 		ShowProjects:   cfg.ShowProjects,
 		AutoUpdate:     cfg.AutoUpdate,
+		ThemeColors:    cfg.CustomTheme,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
 		OpaqueWindow:   windowOpaque,
@@ -358,11 +366,24 @@ func (a *App) SaveRefreshMinutes(minutes int) error {
 // nothing here redraws the window.
 func (a *App) SetTheme(theme string) error {
 	switch theme {
-	case config.ThemeDark, config.ThemeLight, config.ThemeSystem:
+	case config.ThemeDark, config.ThemeLight, config.ThemeSystem, config.ThemeSand, config.ThemeCustom:
 	default:
-		return errors.New("theme must be dark, light or system")
+		return errors.New("theme must be dark, light, system, sand or custom")
 	}
 	_, err := a.cfg.Update(func(c *config.Config) { c.Theme = theme })
+	return err
+}
+
+// SetThemeColors saves the colours a custom theme is built from and selects it in one write, so a
+// half-applied palette can never be restored on the next launch.
+func (a *App) SetThemeColors(colors config.ThemeColors) error {
+	if colors.IsZero() {
+		return errors.New("pick at least one colour for a custom theme")
+	}
+	_, err := a.cfg.Update(func(c *config.Config) {
+		c.CustomTheme = colors
+		c.Theme = config.ThemeCustom
+	})
 	return err
 }
 
