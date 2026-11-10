@@ -43,7 +43,9 @@ const hasPopover = true
 var windowOpaque bool
 
 const (
-	windowWidth  = 380
+	// The mix card puts the ring beside a legend of model names, which truncated at 380. The popover
+	// is wider instead of taller, so the same rows fit without pushing the panel off a short screen.
+	windowWidth  = 460
 	windowHeight = 560
 	// hideDelay lets a tray click cancel the blur that the click itself causes.
 	hideDelay = 220 * time.Millisecond

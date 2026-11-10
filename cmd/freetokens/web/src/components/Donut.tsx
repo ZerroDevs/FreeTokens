@@ -18,10 +18,10 @@ type Props = {
   holeHint?: string;
 };
 
-const SIZE = 132;
+const SIZE = 148;
 const CENTER = SIZE / 2;
-const OUTER = 61.5;
-const INNER = 42.5;
+const OUTER = 69;
+const INNER = 48;
 const GROW = 1.05;
 // Half the dark seam between neighbours, in degrees. Equal angles keep every seam the same width,
 // which stroked dashes could not: their butt caps meet at radial edges and drift with rounding.
@@ -84,7 +84,7 @@ export function Donut({
   );
 
   return (
-    <div className="relative grid h-[132px] w-[132px] shrink-0 place-items-center">
+    <div className="relative grid h-[148px] w-[148px] shrink-0 place-items-center">
       <svg
         width={SIZE}
         height={SIZE}

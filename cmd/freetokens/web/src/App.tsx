@@ -116,8 +116,8 @@ export default function App() {
   const quit = useCallback(() => bridge?.Quit(), []);
 
   return (
-    <div className="popover-frame flex h-screen w-screen p-2">
-      <div className="popover-shell flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-shell/90 shadow-popover backdrop-blur-2xl">
+    <div className="popover-frame flex h-screen w-screen p-1.5">
+      <div className="popover-shell flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-shell/95 shadow-popover">
         {settingsOpen ? (
           <Settings
             demo={!isDesktop}

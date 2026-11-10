@@ -32,7 +32,9 @@
   --color-model-8: #34d399;
   --color-model-other: #636366;
 
-  --shadow-popover: 0 16px 48px rgba(0, 0, 0, 0.45);
+  /* A tight shadow and a thin translucent margin, so the window reads as a panel on the desktop
+     rather than a blurred halo around it. */
+  --shadow-popover: 0 10px 22px rgba(0, 0, 0, 0.26);
 
   --font-sans:
     "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text",
@@ -74,7 +76,7 @@ html[data-theme="light"] {
   --color-model-8: #047857;
   --color-model-other: #9ca3af;
 
-  --shadow-popover: 0 16px 40px rgba(0, 0, 0, 0.16);
+  --shadow-popover: 0 10px 20px rgba(0, 0, 0, 0.12);
 }
 
 html,

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { formatClockHours, formatMoney, formatReset } from "../lib/format";
 import type { Meter, Quota } from "../lib/types";
+import { ChevronDownIcon } from "./Icons";
 
 type Props = {
   quota: Quota;
@@ -58,6 +60,9 @@ function Row({ label, value, note }: { label: string; value: string; note?: stri
 }
 
 export function DailyHours({ quota, now, sessions }: Props) {
+  // Balance and session rows are secondary, so the card leads with the daily figure and they stay
+  // collapsed until asked for.
+  const [showMore, setShowMore] = useState(false);
   const meter = quota.meters.find((item) => item.label === "Daily Hours") ?? quota.meters[0];
   if (!meter) return null;
 
@@ -92,9 +97,30 @@ export function DailyHours({ quota, now, sessions }: Props) {
 
   return (
     <section aria-labelledby="hours-heading" className="rounded-[12px] bg-panel px-3.5 py-3">
-      <h2 id="hours-heading" className="text-[14px] font-semibold text-ink">
-        {meter.label}
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="hours-heading" className="text-[14px] font-semibold text-ink">
+          {meter.label}
+        </h2>
+        {hasRows ? (
+          <button
+            type="button"
+            aria-expanded={showMore}
+            aria-controls="hours-more"
+            aria-label={
+              showMore ? "Hide hours balance and session" : "Show hours balance and session"
+            }
+            title={showMore ? "Hide hours balance and session" : "Show hours balance and session"}
+            onClick={() => setShowMore((open) => !open)}
+            className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-[6px] text-faint transition-colors hover:bg-raised hover:text-ink"
+          >
+            <ChevronDownIcon
+              className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${
+                showMore ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        ) : null}
+      </div>
 
       <div
         role="progressbar"
@@ -122,8 +148,8 @@ export function DailyHours({ quota, now, sessions }: Props) {
 
       {note ? <p className="mt-1 text-[10.5px] leading-snug text-faint">{note}</p> : null}
 
-      {hasRows ? (
-        <div className="mt-2.5 space-y-2.5">
+      {hasRows && showMore ? (
+        <div id="hours-more" className="mt-2.5 space-y-2.5">
           {balance != null ? (
             <Row label="Hours Balance" value={`${balance} ${balance === 1 ? "hr" : "hrs"}`} note="Separate from the daily pool" />
           ) : null}
