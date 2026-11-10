@@ -22,6 +22,12 @@ export function formatMoney(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+/** Builds stamped by GoReleaser carry a tag; a local run has none. */
+export function versionLabel(version: string): string {
+  if (!version || version === "dev" || version === "preview") return "development build";
+  return `v${version.replace(/^v/, "")}`;
+}
+
 /**
  * Compact money for the donut hole, where width is fixed: ~$980, ≥$2.4K, ~$11.5K. Small amounts keep
  * cents because "<$0.01" and "~$0.04" are different facts.
