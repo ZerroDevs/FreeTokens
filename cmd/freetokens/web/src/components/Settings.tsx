@@ -116,9 +116,16 @@ export function Settings(props: Props) {
               </SettingsSection>
 
               <SourceHealthSection sources={props.sources} />
-              <Updates prefs={prefs} demo={props.demo} onPrefs={setPrefs} />
-              <Report demo={props.demo} days={props.days} />
-              <About version={prefs.version} demo={props.demo} onQuit={props.onQuit} />
+
+              {/* One card, three bands: Updates, Report and About each had a heading and a card of
+                  their own, which spent more height than the rows they held. */}
+              <SettingsSection id="about" title="About">
+                <SettingsCard>
+                  <Updates prefs={prefs} demo={props.demo} onPrefs={setPrefs} />
+                  <Report demo={props.demo} days={props.days} />
+                  <About version={prefs.version} demo={props.demo} onQuit={props.onQuit} />
+                </SettingsCard>
+              </SettingsSection>
             </>
           ) : null}
         </div>

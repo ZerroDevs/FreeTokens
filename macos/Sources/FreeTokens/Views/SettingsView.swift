@@ -130,7 +130,16 @@ struct SettingsView: View {
                         .padding(.vertical, 8)
                 }
             }
-            group("Updates") {
+            if let error = model.settingsError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.notice)
+                    .padding(.horizontal, 4)
+            }
+            // One card, three bands: Updates, the CSV copy and About each had a heading and a card
+            // of their own, which spent more height than the rows inside them.
+            group("About") {
+                band("Updates")
                 row("GitHub Releases") {
                     Picker("Updates", selection: Binding(get: { model.settings.autoUpdate }, set: { model.setAutoUpdate($0) })) {
                         Text("Never Check").tag("off")
@@ -148,14 +157,8 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-            }
-            if let error = model.settingsError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.notice)
-                    .padding(.horizontal, 4)
-            }
-            group("Data") {
+                RowDivider()
+                band("Report")
                 HStack(spacing: 8) {
                     Text(dataNote ?? "One row per local day with tokens, estimated cost and completeness.")
                         .font(.system(size: 11))
@@ -167,8 +170,7 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-            }
-            group("About") {
+                RowDivider()
                 HStack(spacing: 10) {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
@@ -349,6 +351,17 @@ struct SettingsView: View {
                 .padding(.vertical, 3)
                 .cardSurface()
         }
+    }
+
+    /// A small label that separates bands sharing one card, like the popover's About card.
+    private func band(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(Theme.faint)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.top, 9)
+            .padding(.bottom, 3)
     }
 
     private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {

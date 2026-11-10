@@ -250,8 +250,9 @@ than inventing a time.
 
 **Settings → Usage Sources** shows the first reader with the inputs it found, when it last read it
 and why a count is short (unreadable files, a failed read, no sign-in); **Show all** opens the rest.
-That turns *totals may be incomplete* into something actionable. **Copy daily CSV** copies the same rows `freetokens export
---csv` prints: one row per local day with tokens, estimated cost and completeness flags.
+That turns *totals may be incomplete* into something actionable. **Copy daily CSV** copies the same
+rows `freetokens export --csv` prints: one row per local day with tokens, estimated cost and
+completeness flags.
 
 You need to have signed in once with the Freebuff CLI (`freebuff login`). FreeTokens reads the
 CLI's existing `default` profile and never signs in, starts a session, or changes your account. It
@@ -333,11 +334,10 @@ lists, are shown as **OpenCode Zen**.
 
 ## Updates (opt-in)
 
-FreeTokens never contacts GitHub unless you ask it to. In the macOS app, use **Settings →
-Updates**. The Windows popover's **Settings → Updates** checks for a newer release, links to it
-without installing anything, sets the same policy as the tray menu, and can skip a version so it
-isn't announced again. The classic tray keeps the automatic options under **Settings →
-Updates from GitHub Releases**:
+FreeTokens never contacts GitHub unless you ask it to. In both apps, **Settings → About → Updates**
+checks for a newer release, links to it without installing anything, sets the same policy as the
+tray menu, and can skip a version so it isn't announced again. The classic tray keeps the
+automatic options under **Settings → Updates from GitHub Releases**:
 
 - **Never Check** (default)
 - **Check Daily and Notify** shows an **Install** item when a release is available
@@ -370,8 +370,9 @@ directory, update it the way you installed it.
 The popover's **Settings** panel is a stack of cards: **General** (start at login, the session
 timer in the menu bar, refresh interval), **Appearance**, the **Menu bar figure** (session
 countdown, hours left, tokens today, cost today or nothing), the monthly budget, **Usage** history
-and project grouping, **Sources**, **Updates** with **Check Now** and **Skip this version**,
-**Report** with **Copy status** / **Copy daily CSV**, and **About**.
+and project grouping, **Usage Sources**, and one **About** card holding **Updates** with **Check
+Now** and **Skip this version**, **Report** with **Copy status** / **Copy daily CSV**, and the
+version with its links. Both apps use that merged card; the macOS app's CSV copy sits in it too.
 
 **Appearance** ships five themes: **Dark** (the default neutral graphite with a blue accent),
 **Light**, **Sand** (the older warm sepia), **System** to follow the OS appearance, and **Custom**.

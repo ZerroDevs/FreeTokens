@@ -33,6 +33,11 @@ export function SettingsCard({ children }: { children: ReactNode }) {
   );
 }
 
+/** A named band inside one card, for groups that share it instead of owning a card each. */
+export function SettingsBand({ children }: { children: ReactNode }) {
+  return <h3 className="px-3 pb-0.5 pt-2.5 text-[10.5px] font-semibold text-faint">{children}</h3>;
+}
+
 /** A card row: a name and optional note on the left, its control on the right. */
 export function SettingRow({
   label,
