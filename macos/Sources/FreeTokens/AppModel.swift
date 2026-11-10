@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     private var updateTimer: Timer?
     private var pendingInteractive = false
     private var observers: [NSObjectProtocol] = []
+    private var appearance: NSKeyValueObservation?
 
     func start() {
         Task {
@@ -46,6 +47,11 @@ final class AppModel: ObservableObject {
         observers.append(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { await self?.refresh() }
         })
+        // The System theme paints from its own palette, so a light/dark flip has to repaint rather
+        // than let AppKit's dynamic colours carry the change.
+        appearance = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            Task { @MainActor in self?.systemAppearanceChanged() }
+        }
     }
 
     // MARK: - Usage
@@ -98,14 +104,27 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The panel follows the configured theme, like the Windows and Linux popover. "system" clears
-    /// the override so AppKit tracks the system appearance again.
+    /// The panel follows the configured theme, like the Windows and Linux popover: the palette is
+    /// handed to the views, and the window chrome follows the same light/dark answer. "system"
+    /// clears the override so AppKit tracks the system appearance again.
     private func applyTheme() {
+        // The override goes first: the System palette resolves from the appearance this leaves in
+        // place, so switching back to System has to clear it before the colours are picked.
         switch settings.theme {
-        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "dark", "sand": NSApp.appearance = NSAppearance(named: .darkAqua)
         case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "custom":
+            NSApp.appearance = NSAppearance(named: Themes.isLight(settings.customTheme) ? .aqua : .darkAqua)
         default: NSApp.appearance = nil
         }
+        Theme.apply(theme: settings.theme, colors: settings.customTheme)
+    }
+
+    private func systemAppearanceChanged() {
+        guard settings.theme == "system" else { return }
+        applyTheme()
+        // Nothing in `settings` changed, so the views need a nudge to repaint from the new palette.
+        objectWillChange.send()
     }
 
     func setShowTimers(_ on: Bool) { set("show-timers", on ? "true" : "false") }
@@ -115,6 +134,10 @@ final class AppModel: ObservableObject {
     /// Zero disables the popover's budget line, so a fractional amount is always formatted as one.
     func setBudget(_ amount: Double) { set("budget-usd", String(format: "%.2f", amount)) }
     func setTheme(_ theme: String) { set("theme", theme) }
+
+    /// Saves one custom-theme colour. The engine selects the custom theme with that write, so a
+    /// pick is enough to switch the panel over.
+    func setThemeColor(_ field: ThemeColorField, _ hex: String) { set(field.key, hex) }
     func setRefreshMinutes(_ minutes: Int) { set("refresh-minutes", String(minutes)) }
 
     /// The retained daily rollups as CSV, the same text `freetokens export --csv` prints.

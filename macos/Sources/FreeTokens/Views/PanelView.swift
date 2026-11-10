@@ -38,6 +38,9 @@ struct PanelView: View {
                 .frame(height: Self.footerHeight)
         }
         .frame(width: Self.width)
+        // Body text inherits the palette's ink, so a custom theme recolours unstyled labels too.
+        .foregroundStyle(Theme.ink)
+        .tint(Theme.brand)
         .background(Theme.tray)
         .onPreferenceChange(ContentHeightKey.self) { height in
             if abs(height - state.contentHeight) > 0.5 { state.contentHeight = height }
@@ -60,7 +63,7 @@ struct DashboardView: View {
                     systemImage: "arrow.down.circle.fill",
                     title: "FreeTokens v\(version) is available",
                     message: "It's checked against the release's checksums before it replaces this app.",
-                    tint: .accentColor
+                    tint: Theme.brand
                 ) {
                     if let url, let link = URL(string: url) {
                         Link("Release Notes", destination: link)
@@ -120,7 +123,7 @@ struct FooterView: View {
         .frame(maxHeight: .infinity)
         .background(Theme.cardFill.opacity(0.6))
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+            Rectangle().fill(Theme.line).frame(height: 0.5)
         }
     }
 
@@ -141,7 +144,7 @@ struct FooterView: View {
                 }
             }
             .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.muted)
             .lineLimit(1)
         }
     }

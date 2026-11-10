@@ -36,7 +36,7 @@ struct FreebuffSection: View {
                 ProgressView().controlSize(.small)
                 Text("Loading your Freebuff usage…")
                     .font(.system(size: Theme.supporting))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             .frame(maxWidth: .infinity, minHeight: 64)
             .cardSurface()
@@ -63,7 +63,7 @@ struct FreebuffSection: View {
             }
             if sessions.isEmpty {
                 if !meters.isEmpty || quota.hoursBalance != nil { RowDivider() }
-                TextRow(title: "Sessions", value: "No active session", valueStyle: AnyShapeStyle(.secondary))
+                TextRow(title: "Sessions", value: "No active session", valueStyle: AnyShapeStyle(Theme.muted))
             } else {
                 ForEach(Array(sessions.enumerated()), id: \.offset) { index, expiry in
                     RowDivider()
@@ -161,7 +161,7 @@ struct MeterRow: View {
                     } label: {
                         Text(showResetTimes ? "Resets \(Format.time(reset))" : "Resets in \(Format.duration(reset.timeIntervalSince(now)))")
                             .font(.system(size: Theme.supporting))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
                             .monospacedDigit()
                     }
                     .buttonStyle(.plain)

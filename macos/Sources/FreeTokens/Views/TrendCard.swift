@@ -39,14 +39,14 @@ struct TrendSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(caption(points))
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .monospacedDigit()
                     .lineLimit(1)
                 HStack(alignment: .bottom, spacing: 2) {
                     ForEach(points, id: \.key) { point in
                         let value = amount(point.day)
                         RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(point.key == hovered ? Color(nsColor: .controlAccentColor) : Color(nsColor: .systemBlue).opacity(value > 0 ? 0.75 : 0.18))
+                            .fill(point.key == hovered ? Theme.brandStrong : Theme.brand.opacity(value > 0 ? 0.75 : 0.18))
                             .frame(height: value > 0 ? max(3, 38 * value / peak) : 2)
                             .frame(maxWidth: .infinity, maxHeight: 38, alignment: .bottom)
                             .contentShape(Rectangle())
@@ -69,22 +69,22 @@ struct TrendSection: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(busiest(slots))
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .monospacedDigit()
                     VStack(spacing: 2) {
                         ForEach(0..<7, id: \.self) { weekday in
                             HStack(spacing: 2) {
                                 Text(Self.weekdays[weekday])
                                     .font(.system(size: 9))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(Theme.faint)
                                     .frame(width: 24, alignment: .leading)
                                 ForEach(0..<24, id: \.self) { hour in
                                     let slot = slots[weekday * 24 + hour]
                                     let amount = slotValue(slot)
                                     RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                                         .fill(amount > 0
-                                              ? Color(nsColor: .controlAccentColor).opacity(0.2 + 0.8 * amount / peak)
-                                              : Color.primary.opacity(0.08))
+                                              ? Theme.brandStrong.opacity(0.2 + 0.8 * amount / peak)
+                                              : Theme.line)
                                         .frame(height: 8)
                                         .help("\(Self.weekdays[weekday]) \(hourLabel(hour)): \(slotDetail(slot))")
                                 }
@@ -103,7 +103,7 @@ struct TrendSection: View {
                         Text("11pm")
                     }
                     .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.faint)
                     .padding(.leading, 26)
                 }
                 .padding(.horizontal, 14)

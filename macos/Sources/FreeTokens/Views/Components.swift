@@ -13,7 +13,7 @@ struct SectionHeader<Accessory: View>: View {
             if let badge, !badge.isEmpty {
                 Text(badge)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(Theme.cardFill))
@@ -41,7 +41,7 @@ struct CapsuleMeter: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.09))
+                Capsule().fill(Theme.track)
                 Capsule()
                     .fill(color)
                     .frame(width: max(fraction > 0 ? height : 0, proxy.size.width * min(max(fraction, 0), 1)))
@@ -57,7 +57,7 @@ struct TextRow: View {
     let title: String
     let value: String
     var detail: String?
-    var valueStyle: AnyShapeStyle = AnyShapeStyle(.primary)
+    var valueStyle: AnyShapeStyle = AnyShapeStyle(Theme.ink)
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -73,7 +73,7 @@ struct TextRow: View {
                 if let detail {
                     Text(detail)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 }
             }
         }
@@ -86,7 +86,7 @@ struct TextRow: View {
 struct RowDivider: View {
     var body: some View {
         Rectangle()
-            .fill(Color.primary.opacity(0.07))
+            .fill(Theme.line)
             .frame(height: 0.5)
             .padding(.horizontal, 14)
     }
@@ -105,7 +105,7 @@ struct ChromeButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
                 .rotationEffect(.degrees(spinning ? 360 : 0))
                 .animation(spinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: spinning)
                 .frame(width: 28, height: 28)
@@ -139,7 +139,7 @@ struct NoticeCard<Actions: View>: View {
                         .font(.system(size: Theme.label, weight: .semibold))
                     Text(message)
                         .font(.system(size: Theme.supporting))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

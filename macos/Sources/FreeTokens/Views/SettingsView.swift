@@ -44,15 +44,26 @@ struct SettingsView: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                RowDivider()
-                row("Appearance") {
-                    Picker("Appearance", selection: Binding(get: { model.settings.theme }, set: { model.setTheme($0) })) {
-                        Text("System").tag("system")
-                        Text("Dark").tag("dark")
-                        Text("Light").tag("light")
+            }
+            // The same five choices the popover offers, and the same four colours for Custom.
+            group("Appearance") {
+                row("Theme") {
+                    Picker("Theme", selection: Binding(get: { model.settings.theme }, set: { model.setTheme($0) })) {
+                        ForEach(Themes.ids, id: \.self) { id in
+                            Text(Themes.name(id)).tag(id)
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()
+                }
+                if model.settings.theme == "custom" {
+                    ForEach(ThemeColorField.allCases, id: \.self) { field in
+                        RowDivider()
+                        row(field.label) {
+                            ColorPicker(field.label, selection: colorBinding(field), supportsOpacity: false)
+                                .labelsHidden()
+                        }
+                    }
                 }
             }
             group("Usage") {
@@ -63,7 +74,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Text("Monthly Ceiling").font(.system(size: Theme.label))
                     Spacer(minLength: 8)
-                    Text("$").foregroundStyle(.secondary)
+                    Text("$").foregroundStyle(Theme.muted)
                     TextField("None", text: $budgetText)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 76)
@@ -92,7 +103,7 @@ struct SettingsView: View {
                 } else {
                     Text("Sources appear after the first refresh.")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                 }
@@ -126,7 +137,7 @@ struct SettingsView: View {
                 HStack(spacing: 8) {
                     Text(dataNote ?? "One row per local day with tokens, estimated cost and completeness.")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Button("Copy CSV") { copyCSV() }
@@ -145,7 +156,7 @@ struct SettingsView: View {
                             .font(.system(size: Theme.label, weight: .semibold))
                         Text("Unofficial. Not affiliated with Freebuff or Codebuff.")
                             .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -170,6 +181,15 @@ struct SettingsView: View {
         .onChange(of: model.settings.budgetUsd) { value in
             budgetText = value > 0 ? Format.number(value) : ""
         }
+    }
+
+    /// A colour field reads the stored colour and writes the one the picker returns; the engine
+    /// switches to the custom theme on that write, like the popover's colour rows.
+    private func colorBinding(_ field: ThemeColorField) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(hex: model.settings.customTheme.value(field)) ?? .black) },
+            set: { model.setThemeColor(field, $0.hexString) }
+        )
     }
 
     private func saveBudget() {
@@ -228,18 +248,18 @@ struct SettingsView: View {
                     // The hosted reader owns no files; its state, not a count, says whether it answered.
                     Text(sourceCount(source))
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 }
                 if let detail = source.detail {
                     Text(detail)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let read = source.lastReadAt {
                     Text("Last read \(Format.ago(read))")
                         .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.faint)
                 }
             }
         }
@@ -251,8 +271,8 @@ struct SettingsView: View {
         switch state {
         case "ok": return Theme.positive
         case "partial", "cached": return Theme.notice
-        case "error": return Color(nsColor: .systemRed)
-        default: return Color.primary.opacity(0.25)
+        case "error": return Theme.danger
+        default: return Theme.faint
         }
     }
 
@@ -266,7 +286,7 @@ struct SettingsView: View {
         let (text, tint) = updateText
         return Text(text)
             .font(.system(size: 11))
-            .foregroundStyle(tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+            .foregroundStyle(tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(Theme.muted))
             .fixedSize(horizontal: false, vertical: true)
     }
 

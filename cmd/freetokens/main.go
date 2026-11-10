@@ -53,9 +53,11 @@ Usage:
   freetokens update [--check] [--json] [--scheduled]
                                     Check GitHub Releases and install a verified newer version
   freetokens config [get | path | reset | set <key> <value>]
-                                    Keys: auto-update (off|notify|auto), budget-usd, refresh-minutes,
-                                    show-projects (true|false), show-timers (true|false),
-                                    theme (dark|light|system), tray-title
+                                    Keys: accent-color, auto-update (off|notify|auto),
+                                    background-color, budget-usd, card-color, refresh-minutes,
+                                    show-history (true|false), show-projects (true|false),
+                                    show-timers (true|false), text-color,
+                                    theme (dark|light|sand|system|custom), tray-title
                                     (session|hours|tokens|cost|none), skipped-version
   freetokens autostart [on|off]     Start FreeTokens at login
   freetokens launcher [install|remove]
@@ -466,7 +468,7 @@ func runConfig(args []string) error {
 		return nil
 	}
 	if args[0] != "set" || len(args) != 3 {
-		return errors.New("usage: freetokens config get | path | reset | set <auto-update|budget-usd|refresh-minutes|show-history|show-projects|show-timers|theme|tray-title|skipped-version> <value>")
+		return errors.New("usage: freetokens config get | path | reset | set <accent-color|auto-update|background-color|budget-usd|card-color|refresh-minutes|show-history|show-projects|show-timers|text-color|theme|tray-title|skipped-version> <value>")
 	}
 	key, val := args[1], strings.ToLower(args[2])
 	var setErr error
@@ -534,6 +536,24 @@ func runConfig(args []string) error {
 			default:
 				setErr = errors.New("show-projects must be true or false")
 			}
+		case "accent-color", "background-color", "card-color", "text-color":
+			// The four colours a custom theme is built from. Choosing one is choosing that theme, the
+			// same single write the popover makes, so a half-applied palette is never left behind.
+			if config.HexColor(val) == "" {
+				setErr = fmt.Errorf("%s must be a hex colour like #0a84ff", key)
+				return
+			}
+			switch key {
+			case "accent-color":
+				c.CustomTheme.Accent = val
+			case "background-color":
+				c.CustomTheme.Background = val
+			case "card-color":
+				c.CustomTheme.Card = val
+			default:
+				c.CustomTheme.Text = val
+			}
+			c.Theme = config.ThemeCustom
 		case "skipped-version", "skippedVersion":
 			// An empty value clears the skip, which is the escape hatch when no UI is available.
 			c.SkippedVersion = update.Normalize(val)

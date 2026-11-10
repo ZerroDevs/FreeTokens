@@ -109,6 +109,52 @@ struct Day: Decodable, Equatable, Identifiable {
     var id: String { date }
 }
 
+/// One of the four colours a custom theme is built from, named the way `config set` spells it.
+enum ThemeColorField: String, CaseIterable {
+    case accent, background, card, text
+
+    var key: String { rawValue + "-color" }
+
+    var label: String {
+        switch self {
+        case .accent: return "Accent"
+        case .background: return "Background"
+        case .card: return "Card"
+        case .text: return "Text"
+        }
+    }
+
+    /// The same starting colours the popover uses, so both apps look alike before a pick.
+    var fallback: String {
+        switch self {
+        case .accent: return "#0a84ff"
+        case .background: return "#0f0f11"
+        case .card: return "#232326"
+        case .text: return "#f5f5f7"
+        }
+    }
+}
+
+/// The colours a custom theme is built from; every other colour is derived in `Themes`.
+struct ThemeColors: Decodable, Equatable {
+    var accent: String?
+    var background: String?
+    var card: String?
+    var text: String?
+
+    func value(_ field: ThemeColorField) -> String {
+        let stored: String?
+        switch field {
+        case .accent: stored = accent
+        case .background: stored = background
+        case .card: stored = card
+        case .text: stored = text
+        }
+        let trimmed = (stored ?? "").trimmingCharacters(in: .whitespaces)
+        return Themes.isHex(trimmed) ? trimmed : field.fallback
+    }
+}
+
 /// `freetokens config get`.
 struct EngineSettings: Decodable, Equatable {
     var autoUpdate: String = "off"
@@ -120,6 +166,8 @@ struct EngineSettings: Decodable, Equatable {
     var budgetUsd: Double = 0
     var trayTitle: String = "session"
     var theme: String = "system"
+    /// The colours a custom theme is built from, stored beside the choice.
+    var customTheme: ThemeColors = ThemeColors()
 }
 
 /// `freetokens update --json`.

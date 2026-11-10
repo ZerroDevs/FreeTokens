@@ -376,13 +376,14 @@ and project grouping, **Sources**, **Updates** with **Check Now** and **Skip thi
 **Light**, **Sand** (the older warm sepia), **System** to follow the OS appearance, and **Custom**.
 Custom builds the whole palette from four colours — accent, background, card and text — picked with
 a colour well or typed as hex, and every colour in the panel is derived from them. A theme applies
-to the popover only; the tray icon follows the system. The macOS app's **Settings** reads the same
-keys but offers Dark, Light and System, so a Sand or Custom pick shows there as the system
-appearance. They also work from the command line:
+to the panel only; the tray icon and menu bar title follow the system. The macOS app's **Settings**
+offers the same five themes and the same four custom colours, drawn from the same keys. Themes also
+work from the command line:
 
 ```bash
 freetokens config set refresh-minutes 15
 freetokens config set theme system        # dark | light | sand | system | custom
+freetokens config set accent-color "#ff2d55"  # saves a colour and picks the custom theme
 freetokens config set budget-usd 250          # 0 turns the budget line off
 freetokens config set tray-title tokens       # session | hours | tokens | cost | none
 freetokens config set show-history true       # the 30-day bars and the period comparison, under the mix

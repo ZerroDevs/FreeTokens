@@ -93,6 +93,37 @@ func TestConfigSetBudgetTrayTitleAndProjects(t *testing.T) {
 	}
 }
 
+// A custom theme is four colours the macOS settings write one at a time, so each write has to keep
+// the others and select the custom theme; a value that is not a colour is rejected, not saved.
+func TestConfigSetThemeColorsSelectsCustom(t *testing.T) {
+	t.Setenv("FREETOKENS_CONFIG_DIR", t.TempDir())
+	store, err := config.DefaultStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"set", "accent-color", "#ff2d55"},
+		{"set", "background-color", "#101014"},
+		{"set", "card-color", "#232326"},
+		{"set", "text-color", "#f5f5f7"},
+	} {
+		if err := runConfig(args); err != nil {
+			t.Fatalf("config %v: %v", args, err)
+		}
+	}
+	cfg := store.Load()
+	want := config.ThemeColors{Accent: "#ff2d55", Background: "#101014", Card: "#232326", Text: "#f5f5f7"}
+	if cfg.Theme != config.ThemeCustom || cfg.CustomTheme != want {
+		t.Fatalf("saved theme = %q, colours = %+v", cfg.Theme, cfg.CustomTheme)
+	}
+	if err := runConfig([]string{"set", "accent-color", "tomato"}); err == nil {
+		t.Fatal("a colour name was accepted")
+	}
+	if got := store.Load().CustomTheme.Accent; got != "#ff2d55" {
+		t.Fatalf("a rejected value changed the accent to %q", got)
+	}
+}
+
 // The macOS app decodes `config get` with a non-optional budget, so every key it reads has to be
 // present even when it is zero; an omitted key fails the whole settings load.
 func TestConfigGetAlwaysWritesEveryKey(t *testing.T) {

@@ -101,7 +101,7 @@ struct UsageSection: View {
                 }
                 Image(systemName: "info.circle")
                     .imageScale(.small)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .help(mixNote)
                 Spacer(minLength: 8)
             }
@@ -117,7 +117,7 @@ struct UsageSection: View {
                 } else {
                     Text(snapshot == nil ? "Loading…" : "No measured usage in this period")
                         .font(.system(size: Theme.supporting))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
                 }
@@ -205,10 +205,10 @@ struct UsageSection: View {
             HStack(spacing: 4) {
                 Text(metric.title)
                     .font(.system(size: Theme.header, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Theme.ink)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
         }
         .fixedSize()
@@ -241,10 +241,10 @@ struct UsageSection: View {
             HStack(spacing: 3) {
                 Text(split == .kinds ? "Kinds" : grouping.short)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.faint)
             }
         }
         .fixedSize()
@@ -266,7 +266,7 @@ struct UsageSection: View {
                 } label: {
                     Text(shortLabel(candidate.label))
                         .font(.system(size: 11, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(selected ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Theme.muted))
                         .padding(.vertical, 4)
                         .frame(maxWidth: .infinity)
                         .contentShape(Capsule())
@@ -283,7 +283,7 @@ struct UsageSection: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(0.06)))
+        .background(Capsule().fill(Theme.track))
     }
 
     private func shortLabel(_ label: String) -> String {
@@ -302,7 +302,7 @@ struct UsageSection: View {
         }
         return Text(parts.joined(separator: " · "))
             .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, alignment: .center)
     }
 
@@ -312,7 +312,7 @@ struct UsageSection: View {
         let share = prompt > 0 ? Double(kinds.cacheRead) / Double(prompt) : 0
         return Text("Cache hit \(Int((share * 100).rounded()))% · \(Format.tokens(kinds.cacheRead)) of \(Format.tokens(prompt)) prompt tokens")
             .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.muted)
             .monospacedDigit()
             .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -334,7 +334,7 @@ struct UsageSection: View {
                 }
             }
             .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.muted)
             CapsuleMeter(fraction: min(max(fraction, 0), 1), color: over ? Theme.notice : Theme.positive, height: 4)
             if over {
                 Text("Over by \(Format.usd(cost - budgetUsd)) in the last 30 days.")
@@ -390,7 +390,7 @@ struct UsageRing: View {
         HStack(spacing: 16) {
             ZStack {
                 if arcs.isEmpty {
-                    Circle().stroke(Color.primary.opacity(0.08), lineWidth: Self.diameter * 0.19)
+                    Circle().stroke(Theme.line, lineWidth: Self.diameter * 0.19)
                         .padding(Self.diameter * 0.095)
                 }
                 ForEach(arcs) { arc in
@@ -407,7 +407,7 @@ struct UsageRing: View {
                 if slices.count > 5 {
                     Text("+\(slices.count - 5) more")
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.faint)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -434,7 +434,7 @@ struct UsageRing: View {
                 .minimumScaleFactor(0.6)
             Text(unit)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.faint)
         }
         .padding(.horizontal, 12)
         .help(costLowerBound ? "A lower bound: some tokens have no public price or no complete receipt yet." : "")
@@ -455,7 +455,7 @@ struct UsageRing: View {
                     .help(slice.name)
                 Text(value(slice))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .monospacedDigit()
                     .lineLimit(1)
             }

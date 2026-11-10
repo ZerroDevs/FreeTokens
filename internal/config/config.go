@@ -121,18 +121,20 @@ func (c *Config) Normalize() {
 	}
 }
 
-// normalized drops any colour that is not a hex value, so a hand-edited config cannot paint the
-// panel with garbage or inject CSS.
+// normalized drops any colour that is not a hex value, so a file edited by hand cannot paint the
+// panel with garbage.
 func (t ThemeColors) normalized() ThemeColors {
 	return ThemeColors{
-		Accent:     hexColor(t.Accent),
-		Background: hexColor(t.Background),
-		Card:       hexColor(t.Card),
-		Text:       hexColor(t.Text),
+		Accent:     HexColor(t.Accent),
+		Background: HexColor(t.Background),
+		Card:       HexColor(t.Card),
+		Text:       HexColor(t.Text),
 	}
 }
 
-func hexColor(value string) string {
+// HexColor returns value when it is a #rgb or #rrggbb colour and empty otherwise, so a hand-edited
+// config or a mistyped CLI write cannot paint the panel with garbage.
+func HexColor(value string) string {
 	if len(value) != 4 && len(value) != 7 {
 		return ""
 	}
