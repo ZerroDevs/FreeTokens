@@ -171,8 +171,8 @@ enum Themes {
         var parts: [Double] = []
         for index in stride(from: 0, to: 6, by: 2) {
             let pair = String(digits[index...index + 1])
-            guard let part = Double(Int(pair, radix: 16) ?? -1), part >= 0 else { return nil }
-            parts.append(part)
+            guard let part = Int(pair, radix: 16) else { return nil }
+            parts.append(Double(part))
         }
         return (parts[0], parts[1], parts[2])
     }
