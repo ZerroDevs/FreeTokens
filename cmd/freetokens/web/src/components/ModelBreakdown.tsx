@@ -16,6 +16,8 @@ type Props = {
   periodLabel: string;
   unknownModels?: string[];
   unmatchedVendors?: string[];
+  /** True when the period's rows reported a token-kind split the reader can expand. */
+  showKinds?: boolean;
 };
 
 export function ModelBreakdown({
@@ -26,13 +28,19 @@ export function ModelBreakdown({
   periodLabel,
   unknownModels,
   unmatchedVendors,
+  showKinds = false,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const listId = useId();
 
   // Switching period or mode reorders the list, so the fold starts from the top again.
   useEffect(() => setExpanded(false), [periodLabel, mode]);
+  // A period with no reported kinds closes the detail rather than leaving an empty toggle open.
+  useEffect(() => {
+    if (!showKinds) setKindsOpen(false);
+  }, [showKinds]);
 
   useEffect(() => {
     if (copied === null) return;
@@ -61,6 +69,21 @@ export function ModelBreakdown({
         <h3 className="text-[12px] font-medium text-muted">Breakdown</h3>
         <span className="text-[10.5px] text-faint">share of {mode === "tokens" ? "tokens" : "cost"}</span>
       </div>
+      {showKinds ? (
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            aria-pressed={kindsOpen}
+            onClick={() => setKindsOpen((open) => !open)}
+            title="Show how much of each row's tokens were cache reads, input and output"
+            className={`h-[20px] rounded-[5px] px-1.5 text-[10px] font-medium transition-colors ${
+              kindsOpen ? "bg-raised text-ink" : "text-faint hover:bg-raised hover:text-ink"
+            }`}
+          >
+            {kindsOpen ? "Hide kinds per row" : "Kinds per row"}
+          </button>
+        </div>
+      ) : null}
       <ul id={listId} className="mt-2 divide-y divide-line/60">
         {shown.map((row) => {
           const value = rowValue(row, mode);
@@ -91,6 +114,17 @@ export function ModelBreakdown({
                 <span>{percent(value, total)}</span>
                 <span className="truncate">{secondary}</span>
               </div>
+              {kindsOpen && row.kinds ? (
+                <div className="mt-[3px] flex items-baseline justify-between gap-3 text-[10px] text-faint tnum">
+                  <span className="truncate">
+                    cache {formatTokens(row.kinds.cacheRead)} · in {formatTokens(row.kinds.input)} · out{" "}
+                    {formatTokens(row.kinds.output)}
+                  </span>
+                  <span className="shrink-0">
+                    {percent(row.kinds.cacheRead, row.kinds.cacheRead + row.kinds.input)} cached
+                  </span>
+                </div>
+              ) : null}
               <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-track">
                 <div
                   className="h-full rounded-full"

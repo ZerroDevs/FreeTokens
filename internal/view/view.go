@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tverma101/FreeTokens/internal/config"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/usage"
@@ -146,6 +147,46 @@ func Sessions(q *freebuff.Quota, now time.Time) []string {
 		out = append(out, fmt.Sprintf("Session %d: %s left", n, Duration(t.Sub(now))))
 	}
 	return out
+}
+
+// TrayTitle is the short figure the menu bar or tray tooltip shows, and the line that explains it.
+// A choice whose data is absent returns nothing rather than a stale or invented figure; the session
+// countdown keeps honouring the session-timer setting, which is what that switch has always meant.
+func TrayTitle(s *tracker.Snapshot, choice string, timers bool, now time.Time) (string, string) {
+	if s == nil {
+		return "", ""
+	}
+	today := func() (usage.Period, bool) {
+		if len(s.Periods) == 0 || !s.Periods[0].HasData {
+			return usage.Period{}, false
+		}
+		return s.Periods[0], true
+	}
+	switch choice {
+	case config.TrayHours:
+		if s.Quota != nil {
+			if m := s.Quota.Meter("Daily Hours"); m != nil {
+				return Hours(math.Max(0, m.Limit-m.Used)), Meter(*m, now)
+			}
+		}
+	case config.TrayTokens:
+		if p, ok := today(); ok {
+			return Tokens(p.Tokens), "Today: " + Tokens(p.Tokens) + " tokens"
+		}
+	case config.TrayCost:
+		if p, ok := today(); ok && p.CostUSD != nil {
+			return USD(*p.CostUSD, p.CostLowerBound), "Today: " + USD(*p.CostUSD, p.CostLowerBound) + " estimated at public API rates"
+		}
+	case config.TrayNone:
+		return "", ""
+	default:
+		if timers {
+			if exp, ok := NextExpiry(s.Quota, now); ok {
+				return Clock(exp.Sub(now)), "Session: " + Duration(exp.Sub(now)) + " left"
+			}
+		}
+	}
+	return "", ""
 }
 
 // NextExpiry is the earliest future session expiry.

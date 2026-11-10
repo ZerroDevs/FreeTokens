@@ -60,6 +60,54 @@ func TestConfigPathReportsStoreFile(t *testing.T) {
 	}
 }
 
+// The new keys are settable from the CLI, which is the only way to change them on a headless or
+// classic-tray install, and an unusable value is rejected instead of saved.
+func TestConfigSetBudgetTrayTitleAndProjects(t *testing.T) {
+	t.Setenv("FREETOKENS_CONFIG_DIR", t.TempDir())
+	store, err := config.DefaultStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"set", "budget-usd", "250.5"},
+		{"set", "tray-title", config.TrayCost},
+		{"set", "show-projects", "true"},
+		{"set", "show-history", "true"},
+	} {
+		if err := runConfig(args); err != nil {
+			t.Fatalf("config %v: %v", args, err)
+		}
+	}
+	cfg := store.Load()
+	if cfg.BudgetUSD != 250.5 || cfg.TrayTitle != config.TrayCost || !cfg.ShowProjects || !cfg.ShowHistory {
+		t.Fatalf("saved = %+v", cfg)
+	}
+	if err := runConfig([]string{"set", "tray-title", "hourly"}); err == nil {
+		t.Fatal("an unknown menu bar figure was accepted")
+	}
+	if err := runConfig([]string{"set", "budget-usd", "-5"}); err == nil {
+		t.Fatal("a negative budget was accepted")
+	}
+	if got := store.Load().BudgetUSD; got != 250.5 {
+		t.Fatalf("a rejected value changed the budget to %v", got)
+	}
+}
+
+// The macOS app decodes `config get` with a non-optional budget, so every key it reads has to be
+// present even when it is zero; an omitted key fails the whole settings load.
+func TestConfigGetAlwaysWritesEveryKey(t *testing.T) {
+	t.Setenv("FREETOKENS_CONFIG_DIR", t.TempDir())
+	out := captureStdout(t, func() error { return runConfig([]string{"get"}) })
+	for _, key := range []string{
+		`"budgetUsd"`, `"trayTitle"`, `"showHistory"`, `"showProjects"`,
+		`"refreshMinutes"`, `"showTimers"`, `"theme"`, `"autoUpdate"`,
+	} {
+		if !strings.Contains(out, key) {
+			t.Fatalf("config get = %s, want %s", out, key)
+		}
+	}
+}
+
 // captureStdout runs fn and returns everything it wrote to os.Stdout.
 func captureStdout(t *testing.T, fn func() error) string {
 	t.Helper()

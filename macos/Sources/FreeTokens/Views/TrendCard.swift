@@ -3,8 +3,11 @@ import SwiftUI
 /// Daily bars for the last 30 days. Hovering a bar shows that day.
 struct TrendSection: View {
     let days: [Day]
+    var slots: [Slot]?
     @AppStorage("usageMetric") private var metricRaw = UsageMetric.cost.rawValue
     @State private var hovered: String?
+
+    private static let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
     private var metric: UsageMetric { UsageMetric(rawValue: metricRaw) ?? .cost }
 
@@ -57,7 +60,76 @@ struct TrendSection: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .cardSurface()
+
+            // Measured usage by weekday and hour: "when do I burn this", which bars per day cannot
+            // answer. Only sources that dated their turns contribute, so a flat grid stays hidden.
+            if let slots, slots.count >= 168,
+               let peak = slots.map(slotValue).max(), peak > 0 {
+                SectionHeader(title: "By Hour")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(busiest(slots))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    VStack(spacing: 2) {
+                        ForEach(0..<7, id: \.self) { weekday in
+                            HStack(spacing: 2) {
+                                Text(Self.weekdays[weekday])
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.tertiary)
+                                    .frame(width: 24, alignment: .leading)
+                                ForEach(0..<24, id: \.self) { hour in
+                                    let slot = slots[weekday * 24 + hour]
+                                    let amount = slotValue(slot)
+                                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                        .fill(amount > 0
+                                              ? Color(nsColor: .controlAccentColor).opacity(0.2 + 0.8 * amount / peak)
+                                              : Color.primary.opacity(0.08))
+                                        .frame(height: 8)
+                                        .help("\(Self.weekdays[weekday]) \(hourLabel(hour)): \(slotDetail(slot))")
+                                }
+                            }
+                        }
+                    }
+                    HStack {
+                        Text("12am")
+                        Spacer(minLength: 2)
+                        Text("6am")
+                        Spacer(minLength: 2)
+                        Text("noon")
+                        Spacer(minLength: 2)
+                        Text("6pm")
+                        Spacer(minLength: 2)
+                        Text("11pm")
+                    }
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, 26)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .cardSurface()
+            }
         }
+    }
+
+    private func slotValue(_ slot: Slot) -> Double {
+        metric == .cost ? (slot.costUsd ?? 0) : Double(slot.tokens)
+    }
+
+    private func slotDetail(_ slot: Slot) -> String {
+        metric == .cost ? Format.usd(slot.costUsd ?? 0, lowerBound: !slot.costComplete) : "\(Format.tokens(slot.tokens)) tokens"
+    }
+
+    private func hourLabel(_ hour: Int) -> String {
+        if hour == 0 { return "12am" }
+        if hour == 12 { return "12pm" }
+        return hour < 12 ? "\(hour)am" : "\(hour - 12)pm"
+    }
+
+    private func busiest(_ slots: [Slot]) -> String {
+        let index = slots.indices.max { slotValue(slots[$0]) < slotValue(slots[$1]) } ?? 0
+        return "Busiest \(Self.weekdays[index / 24]) \(hourLabel(index % 24)) · \(slotDetail(slots[index]))"
     }
 
     private func caption(_ points: [(key: String, day: Day?)]) -> String {

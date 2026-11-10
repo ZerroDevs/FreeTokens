@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"github.com/tverma101/FreeTokens/internal/opencode"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/update"
+	"github.com/tverma101/FreeTokens/internal/usage"
 	"github.com/tverma101/FreeTokens/internal/view"
 )
 
@@ -46,12 +48,15 @@ Usage:
   freetokens tray                   Run the menu bar / tray menu (default on macOS and Linux)
   freetokens status [--json] [--prompt]
                                     Print hours, sessions and token usage once
+  freetokens export [--csv]         Print the retained daily usage as CSV
   freetokens diagnose               Print setup diagnostics (never prints tokens)
   freetokens update [--check] [--json] [--scheduled]
                                     Check GitHub Releases and install a verified newer version
   freetokens config [get | path | reset | set <key> <value>]
-                                    Keys: auto-update (off|notify|auto), refresh-minutes, show-timers (true|false),
-                                    theme (dark|light|system), skipped-version
+                                    Keys: auto-update (off|notify|auto), budget-usd, refresh-minutes,
+                                    show-projects (true|false), show-timers (true|false),
+                                    theme (dark|light|system), tray-title
+                                    (session|hours|tokens|cost|none), skipped-version
   freetokens autostart [on|off]     Start FreeTokens at login
   freetokens launcher [install|remove]
                                     Add or remove the Linux app-menu entry
@@ -94,6 +99,8 @@ func main() {
 		err = runTray()
 	case "status":
 		err = runStatus(args)
+	case "export":
+		err = runExport(args)
 	case "diagnose", "diagnostics":
 		err = runDiagnose()
 	case "update":
@@ -187,6 +194,29 @@ func runStatus(args []string) error {
 	if snap.QuotaError != "" && snap.Quota == nil && len(snap.Periods) == 0 {
 		os.Exit(3)
 	}
+	return nil
+}
+
+// runExport prints the retained daily usage as CSV, the same rows the popover's copy button puts on
+// the clipboard. It never prompts for credentials: an export is a background read.
+func runExport(args []string) error {
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	csvOut := fs.Bool("csv", true, "print CSV")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if !*csvOut {
+		return errors.New("usage: freetokens export [--csv]")
+	}
+	log.SetOutput(io.Discard)
+	t, _, err := newTracker()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signalContext()
+	defer cancel()
+	snap := t.Refresh(ctx, false)
+	fmt.Print(usage.CSV(snap.Days))
 	return nil
 }
 
@@ -436,7 +466,7 @@ func runConfig(args []string) error {
 		return nil
 	}
 	if args[0] != "set" || len(args) != 3 {
-		return errors.New("usage: freetokens config get | path | reset | set <auto-update|refresh-minutes|show-timers|theme|skipped-version> <value>")
+		return errors.New("usage: freetokens config get | path | reset | set <auto-update|budget-usd|refresh-minutes|show-history|show-projects|show-timers|theme|tray-title|skipped-version> <value>")
 	}
 	key, val := args[1], strings.ToLower(args[2])
 	var setErr error
@@ -465,12 +495,44 @@ func runConfig(args []string) error {
 			default:
 				setErr = errors.New("show-timers must be true or false")
 			}
+		case "show-history", "showHistory":
+			switch val {
+			case "true", "on", "yes", "1":
+				c.ShowHistory = true
+			case "false", "off", "no", "0":
+				c.ShowHistory = false
+			default:
+				setErr = errors.New("show-history must be true or false")
+			}
 		case "theme":
 			switch val {
 			case config.ThemeDark, config.ThemeLight, config.ThemeSystem:
 				c.Theme = val
 			default:
 				setErr = errors.New("theme must be dark, light or system")
+			}
+		case "budget-usd", "budgetUsd":
+			var v float64
+			if _, e := fmt.Sscanf(val, "%f", &v); e != nil || v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+				setErr = errors.New("budget-usd must be a non-negative amount, or 0 to turn the budget off")
+				return
+			}
+			c.BudgetUSD = v
+		case "tray-title", "trayTitle":
+			switch val {
+			case config.TraySession, config.TrayHours, config.TrayTokens, config.TrayCost, config.TrayNone:
+				c.TrayTitle = val
+			default:
+				setErr = errors.New("tray-title must be session, hours, tokens, cost or none")
+			}
+		case "show-projects", "showProjects":
+			switch val {
+			case "true", "on", "yes", "1":
+				c.ShowProjects = true
+			case "false", "off", "no", "0":
+				c.ShowProjects = false
+			default:
+				setErr = errors.New("show-projects must be true or false")
 			}
 		case "skipped-version", "skippedVersion":
 			// An empty value clears the skip, which is the escape hatch when no UI is available.

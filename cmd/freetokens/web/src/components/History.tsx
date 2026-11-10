@@ -1,5 +1,5 @@
-import { comparePeriod, lastDays } from "../lib/days";
-import { formatTokens, formatUsd } from "../lib/format";
+import { comparePeriod, lastDays, periodWindow, topMovers } from "../lib/days";
+import { formatMoney, formatTokens, formatUsd } from "../lib/format";
 import type { Day, ValueMode } from "../lib/types";
 
 const DAYS = 14;
@@ -75,14 +75,62 @@ export function PeriodComparison({
     return <p className="mt-2 px-1 text-[10.5px] text-faint">About the same as {comparison.previousLabel}</p>;
   }
 
-  const direction = comparison.change > 0 ? "more" : "less";
+  // The sign carries the direction, so the sentence only has to name the window being compared
+  // against. Grouping keeps a five-digit figure readable instead of a wall of digits.
+  const signed = `${comparison.change > 0 ? "+" : "−"}${percent.toLocaleString()}%`;
 
   return (
     <p className="mt-2 px-1 text-[10.5px] text-faint">
-      <span className="font-medium text-muted">
-        {percent}% {direction}
-      </span>{" "}
-      than {comparison.previousLabel}
+      <span className="font-medium text-muted tnum">{signed}</span> vs {comparison.previousLabel}
     </p>
+  );
+}
+
+/** A signed amount for a mover: +51M or −12.4M tokens, +$4.20 or −$0.80. */
+function signedValue(value: number, mode: ValueMode): string {
+  const sign = value > 0 ? "+" : "−";
+  const size = Math.abs(value);
+  return mode === "tokens" ? `${sign}${formatTokens(size)}` : `${sign}${formatMoney(size)}`;
+}
+
+/**
+ * The models behind the comparison line. A total can fall while one model rises, and the name is
+ * what makes the change actionable; a model new to this window says so instead of a fake percentage.
+ */
+export function Movers({
+  label,
+  days,
+  now,
+  mode,
+}: {
+  label: string;
+  days: Day[];
+  now: number;
+  mode: ValueMode;
+}) {
+  const movers = topMovers(label, days, now, mode);
+  const window = periodWindow(label, now);
+  if (movers.length === 0 || !window) return null;
+
+  return (
+    <div className="mt-1.5 px-1">
+      <p className="text-[10px] text-faint">Moved most vs {window.previousLabel}</p>
+      <ul className="mt-1 space-y-[2px]">
+        {movers.map((mover) => {
+          const percent = mover.change == null ? null : Math.round(Math.abs(mover.change) * 100);
+          return (
+            <li key={mover.name} className="flex items-baseline gap-2 text-[10.5px]">
+              <span className="min-w-0 flex-1 truncate text-muted" title={mover.name}>
+                {mover.name}
+              </span>
+              <span className="shrink-0 font-medium text-ink tnum">{signedValue(mover.delta, mode)}</span>
+              <span className="w-[42px] shrink-0 text-right text-faint tnum">
+                {percent == null ? "new" : `${percent < 1 ? "<1" : percent}%`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

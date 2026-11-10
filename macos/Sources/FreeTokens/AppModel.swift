@@ -109,8 +109,18 @@ final class AppModel: ObservableObject {
     }
 
     func setShowTimers(_ on: Bool) { set("show-timers", on ? "true" : "false") }
+    func setShowHistory(_ on: Bool) { set("show-history", on ? "true" : "false") }
+    func setShowProjects(_ on: Bool) { set("show-projects", on ? "true" : "false") }
+    func setTrayTitle(_ choice: String) { set("tray-title", choice) }
+    /// Zero disables the popover's budget line, so a fractional amount is always formatted as one.
+    func setBudget(_ amount: Double) { set("budget-usd", String(format: "%.2f", amount)) }
     func setTheme(_ theme: String) { set("theme", theme) }
     func setRefreshMinutes(_ minutes: Int) { set("refresh-minutes", String(minutes)) }
+
+    /// The retained daily rollups as CSV, the same text `freetokens export --csv` prints.
+    func exportCSV() async throws -> String {
+        try await Engine.command(["export", "--csv"])
+    }
     func setAutoUpdate(_ policy: String) {
         set("auto-update", policy) { [weak self] in
             if policy != "off" { await self?.scheduledUpdateCheck() }

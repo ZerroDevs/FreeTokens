@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DailyHours } from "./components/DailyHours";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
-import { HistoryStrip, PeriodComparison } from "./components/History";
+import { HistoryStrip, Movers, PeriodComparison } from "./components/History";
 import { ChevronDownIcon } from "./components/Icons";
 import { PeriodTabs, tabLabel } from "./components/PeriodTabs";
 import { Settings } from "./components/Settings";
 import { ErrorState, LoadingState } from "./components/States";
 import { UsageSection } from "./components/UsageSection";
+import { WeekHeatmap } from "./components/WeekHeatmap";
 import { bridge, isDesktop } from "./lib/api";
 import { formatDuration, formatTokens, formatUsd } from "./lib/format";
 import type { Theme, ValueMode } from "./lib/types";
@@ -47,11 +48,19 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => (bridge ? "dark" : storedTheme()));
   const [opaque, setOpaque] = useState(false);
   const [showTimers, setShowTimers] = useState(true);
+  // Off by default: the popover leads with the selected period, and the strip is opt-in from
+  // settings or the tray menu.
+  const [showHistory, setShowHistory] = useState(false);
+  // The budget line and the project grouping are settings the mix reads, so the panel owns them.
+  const [budgetUsd, setBudgetUsd] = useState(0);
+  const [showProjects, setShowProjects] = useState(false);
   const [version, setVersion] = useState<string | undefined>(undefined);
 
   const periods = snapshot?.periods ?? [];
   const safeSelection = periods.length === 0 ? 0 : Math.min(selection, periods.length - 1);
   const period = periods[safeSelection];
+  // The budget measures the rolling 30 days, not the selected tab, so it reads that period.
+  const monthly = periods.find((item) => item.label === "Last 30 Days");
 
   // Countdowns are live figures, so they are derived from `now` instead of the snapshot, which
   // only changes on refresh.
@@ -79,6 +88,9 @@ export default function App() {
         setTheme(normalizeTheme(prefs.theme));
         setOpaque(prefs.opaqueWindow === true);
         setShowTimers(prefs.showTimers !== false);
+        setShowHistory(prefs.showHistory === true);
+        setBudgetUsd(prefs.budgetUsd > 0 ? prefs.budgetUsd : 0);
+        setShowProjects(prefs.showProjects === true);
         setVersion(prefs.version);
       })
       .catch(() => {});
@@ -135,8 +147,67 @@ export default function App() {
     [showTimers],
   );
 
+  const changeShowHistory = useCallback(
+    async (next: boolean) => {
+      const previous = showHistory;
+      setShowHistory(next);
+      try {
+        if (bridge) await bridge.SetShowHistory(next);
+      } catch (error) {
+        setShowHistory(previous);
+        throw error;
+      }
+    },
+    [showHistory],
+  );
+
+  const changeBudget = useCallback(
+    async (next: number) => {
+      const previous = budgetUsd;
+      setBudgetUsd(next);
+      try {
+        if (bridge) await bridge.SetBudgetUSD(next);
+      } catch (error) {
+        setBudgetUsd(previous);
+        throw error;
+      }
+    },
+    [budgetUsd],
+  );
+
+  const changeShowProjects = useCallback(
+    async (next: boolean) => {
+      const previous = showProjects;
+      setShowProjects(next);
+      try {
+        if (bridge) await bridge.SetShowProjects(next);
+      } catch (error) {
+        setShowProjects(previous);
+        throw error;
+      }
+    },
+    [showProjects],
+  );
+
   useEffect(() => {
     const off = window.runtime?.EventsOn("open-settings", () => setSettingsOpen(true));
+    return () => off?.();
+  }, []);
+
+  // The tray menu writes the same settings, so an open popover re-reads them when it says so.
+  useEffect(() => {
+    const off = window.runtime?.EventsOn("prefs", () => {
+      if (!bridge) return;
+      bridge
+        .GetPreferences()
+        .then((prefs) => {
+          setShowTimers(prefs.showTimers !== false);
+          setShowHistory(prefs.showHistory === true);
+          setBudgetUsd(prefs.budgetUsd > 0 ? prefs.budgetUsd : 0);
+          setShowProjects(prefs.showProjects === true);
+        })
+        .catch(() => {});
+    });
     return () => off?.();
   }, []);
 
@@ -204,6 +275,14 @@ export default function App() {
             onTheme={changeTheme}
             showTimers={showTimers}
             onShowTimers={changeShowTimers}
+            showHistory={showHistory}
+            onShowHistory={changeShowHistory}
+            budgetUsd={budgetUsd}
+            onBudget={changeBudget}
+            showProjects={showProjects}
+            onShowProjects={changeShowProjects}
+            sources={snapshot?.sources}
+            days={snapshot?.days}
             onBack={() => setSettingsOpen(false)}
             onQuit={quit}
           />
@@ -258,23 +337,36 @@ export default function App() {
                     <div className="mt-3">
                       <PeriodTabs periods={periods} selected={safeSelection} onSelect={setSelection} />
                     </div>
-                    {period ? (
-                      <PeriodComparison
-                        label={period.label}
-                        days={snapshot.days ?? []}
-                        now={now}
-                        mode={mode}
-                      />
+                    {/* The strip and the scalar comparison stay opt-in, as asked. */}
+                    {showHistory ? (
+                      <>
+                        {period ? (
+                          <PeriodComparison
+                            label={period.label}
+                            days={snapshot.days ?? []}
+                            now={now}
+                            mode={mode}
+                          />
+                        ) : null}
+                        <HistoryStrip days={snapshot.days ?? []} mode={mode} now={now} />
+                      </>
                     ) : null}
-                    <HistoryStrip days={snapshot.days ?? []} mode={mode} now={now} />
                     {period ? (
                       <UsageSection
                         period={period}
                         selected={safeSelection}
                         mode={mode}
                         onMode={setMode}
+                        budgetUsd={budgetUsd}
+                        monthlyCost={monthly?.costUsd}
+                        monthlyCostLowerBound={monthly?.costLowerBound ?? false}
+                        showProjects={showProjects}
                       />
                     ) : null}
+                    {/* Movers and the hour grid are not the optional history views, so they keep
+                        their own place below the mix instead of hiding behind that switch. */}
+                    {period ? <Movers label={period.label} days={snapshot.days ?? []} now={now} mode={mode} /> : null}
+                    {snapshot.slots ? <WeekHeatmap slots={snapshot.slots} mode={mode} /> : null}
                     <button
                       type="button"
                       aria-expanded={true}

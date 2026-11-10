@@ -3,6 +3,7 @@ package usage
 
 import (
 	"math"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -19,14 +20,49 @@ type Variant struct {
 	CostComplete bool     `json:"costComplete"`
 }
 
+// Kinds splits a row's measured tokens by how the model spent them. Cache reads are counted
+// separately from input, and Reasoning is an informational subset of Output: every source bills it
+// as output. A nil Kinds on a row means no reader reported this detail for it, never zero usage.
+type Kinds struct {
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	CacheRead  int64 `json:"cacheRead"`
+	CacheWrite int64 `json:"cacheWrite"`
+	Reasoning  int64 `json:"reasoning,omitempty"`
+}
+
+func (k Kinds) any() bool {
+	return k.Input > 0 || k.Output > 0 || k.CacheRead > 0 || k.CacheWrite > 0 || k.Reasoning > 0
+}
+
+func (k *Kinds) add(o Kinds) {
+	k.Input = satAdd(k.Input, o.Input)
+	k.Output = satAdd(k.Output, o.Output)
+	k.CacheRead = satAdd(k.CacheRead, o.CacheRead)
+	k.CacheWrite = satAdd(k.CacheWrite, o.CacheWrite)
+	k.Reasoning = satAdd(k.Reasoning, o.Reasoning)
+}
+
+// Hour is one local hour of a day's measured usage, kept only when it has usage. The hour-of-week
+// view is built from these, so day rollups stay the retention unit.
+type Hour struct {
+	Hour    int      `json:"hour"`
+	Tokens  int64    `json:"tokens"`
+	CostUSD *float64 `json:"costUsd,omitempty"`
+}
+
 // ModelRow groups variants of one model.
 type ModelRow struct {
-	Name         string    `json:"name"`
-	Provider     string    `json:"provider"`
-	Source       string    `json:"source"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"`
+	Source   string `json:"source"`
+	// Project is the workspace a run belonged to, when its reader records one. It is empty for
+	// sources that don't, which is why project grouping is opt-in.
+	Project      string    `json:"project,omitempty"`
 	Tokens       int64     `json:"tokens"`
 	CostUSD      *float64  `json:"costUsd,omitempty"`
 	CostComplete bool      `json:"costComplete"`
+	Kinds        *Kinds    `json:"kinds,omitempty"`
 	Variants     []Variant `json:"variants,omitempty"`
 }
 
@@ -89,6 +125,8 @@ type Day struct {
 	Partial       bool       `json:"partial"`
 	Models        []ModelRow `json:"models"`
 	UnknownModels []string   `json:"unknownModels,omitempty"`
+	// Hours holds this day's measured usage per local hour, present only when a reader dated turns.
+	Hours []Hour `json:"hours,omitempty"`
 }
 
 type variantAcc struct {
@@ -100,13 +138,23 @@ type variantAcc struct {
 }
 
 type modelAcc struct {
+	name     string
+	project  string
 	tokens   int64
 	cost     float64
 	priced   bool
 	complete bool
 	provider string
 	fallback string
+	kinds    Kinds
+	kindsSet bool
 	variants map[string]*variantAcc
+}
+
+type hourAcc struct {
+	tokens int64
+	cost   float64
+	priced bool
 }
 
 type dayAcc struct {
@@ -116,6 +164,7 @@ type dayAcc struct {
 	complete bool
 	models   map[string]*modelAcc
 	unknown  map[string]bool
+	hours    map[int]*hourAcc
 	partial  bool
 }
 
@@ -148,23 +197,66 @@ func satAdd(a, b int64) int64 {
 
 // Add records measured tokens; a nil cost marks the day and model incomplete.
 func (a *Accumulator) Add(day string, tokens int64, cost *float64, model, group string) {
-	a.add(day, tokens, cost, model, group, "", "")
+	a.add(day, tokens, cost, model, group, "", "", "", Kinds{})
 }
 
 // AddServed records measured tokens whose serving vendor the source recorded. A non-empty provider
 // wins over the keyword table, because a measured vendor beats a guess from the model name.
 func (a *Accumulator) AddServed(day string, tokens int64, cost *float64, model, group, provider string) {
-	a.add(day, tokens, cost, model, group, provider, "")
+	a.add(day, tokens, cost, model, group, provider, "", "", Kinds{})
 }
 
 // AddOwned records measured tokens for a model the source serves itself, such as an OpenCode Zen
 // model. The provider is used only when neither the keyword table nor the pricing catalog names a
 // vendor, so it never relabels another vendor's model.
 func (a *Accumulator) AddOwned(day string, tokens int64, cost *float64, model, group, provider string) {
-	a.add(day, tokens, cost, model, group, "", provider)
+	a.add(day, tokens, cost, model, group, "", provider, "", Kinds{})
 }
 
-func (a *Accumulator) add(day string, tokens int64, cost *float64, model, group, provider, fallback string) {
+// AddKinds is Add with the token kinds the reader measured.
+func (a *Accumulator) AddKinds(day string, tokens int64, cost *float64, model, group string, kinds Kinds) {
+	a.add(day, tokens, cost, model, group, "", "", "", kinds)
+}
+
+// AddServedKinds is AddServed with the token kinds the reader measured.
+func (a *Accumulator) AddServedKinds(day string, tokens int64, cost *float64, model, group, provider string, kinds Kinds) {
+	a.add(day, tokens, cost, model, group, provider, "", "", kinds)
+}
+
+// AddOwnedKinds is AddOwned with the token kinds the reader measured.
+func (a *Accumulator) AddOwnedKinds(day string, tokens int64, cost *float64, model, group, provider string, kinds Kinds) {
+	a.add(day, tokens, cost, model, group, "", provider, "", kinds)
+}
+
+// AddProject records measured tokens with the workspace the run belonged to. Runs of one model in
+// two projects stay separate rows so the optional project grouping can tell them apart.
+func (a *Accumulator) AddProject(day string, tokens int64, cost *float64, model, group, project string, kinds Kinds) {
+	a.add(day, tokens, cost, model, group, "", "", project, kinds)
+}
+
+// AddHour records one hour of measured usage for the hour-of-week view. It never changes the day's
+// totals; Add or one of its variants already did.
+func (a *Accumulator) AddHour(day string, hour int, tokens int64, cost *float64) {
+	if tokens <= 0 || hour < 0 || hour > 23 {
+		return
+	}
+	d := a.day(day)
+	if d.hours == nil {
+		d.hours = map[int]*hourAcc{}
+	}
+	h := d.hours[hour]
+	if h == nil {
+		h = &hourAcc{}
+		d.hours[hour] = h
+	}
+	h.tokens = satAdd(h.tokens, tokens)
+	if cost != nil {
+		h.cost += *cost
+		h.priced = true
+	}
+}
+
+func (a *Accumulator) add(day string, tokens int64, cost *float64, model, group, provider, fallback, project string, kinds Kinds) {
 	d := a.day(day)
 	d.tokens = satAdd(d.tokens, tokens)
 	if cost != nil {
@@ -173,13 +265,17 @@ func (a *Accumulator) add(day string, tokens int64, cost *float64, model, group,
 	} else if tokens > 0 {
 		d.complete = false
 	}
-	id := group
-	if id == "" {
-		id = model
+	name := group
+	if name == "" {
+		name = model
+	}
+	id := name
+	if project != "" {
+		id = name + "\x00" + project
 	}
 	m := d.models[id]
 	if m == nil {
-		m = &modelAcc{complete: true, variants: map[string]*variantAcc{}}
+		m = &modelAcc{name: name, project: project, complete: true, variants: map[string]*variantAcc{}}
 		d.models[id] = m
 	}
 	if provider != "" {
@@ -187,6 +283,10 @@ func (a *Accumulator) add(day string, tokens int64, cost *float64, model, group,
 	}
 	if fallback != "" {
 		m.fallback = fallback
+	}
+	if kinds.any() {
+		m.kinds.add(kinds)
+		m.kindsSet = true
 	}
 	m.tokens = satAdd(m.tokens, tokens)
 	if cost != nil {
@@ -241,15 +341,30 @@ func (a *Accumulator) Build() []Day {
 	for date, d := range a.days {
 		day := Day{Date: date, Tokens: d.tokens, CostUSD: costPtr(d.priced, d.cost), CostComplete: d.complete,
 			Partial: d.partial, UnknownModels: setList(d.unknown), Models: []ModelRow{}}
-		for name, m := range d.models {
-			row := ModelRow{Name: name, Provider: providerFor(m.provider, m.fallback, name, a.Vendor), Source: SourceOf(name), Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
-			if len(m.variants) > 1 || (len(m.variants) == 1 && firstVariant(m).name != name) {
+		for _, m := range d.models {
+			row := ModelRow{Name: m.name, Provider: providerFor(m.provider, m.fallback, m.name, a.Vendor), Source: SourceOf(m.name), Project: m.project, Tokens: m.tokens, CostUSD: costPtr(m.priced, m.cost), CostComplete: m.complete}
+			if m.kindsSet {
+				kinds := m.kinds
+				row.Kinds = &kinds
+			}
+			if len(m.variants) > 1 || (len(m.variants) == 1 && firstVariant(m).name != m.name) {
 				for _, v := range m.variants {
 					row.Variants = append(row.Variants, Variant{v.name, v.tokens, costPtr(v.priced, v.cost), v.complete})
 				}
 				sort.Slice(row.Variants, func(i, j int) bool { return row.Variants[i].Tokens > row.Variants[j].Tokens })
 			}
 			day.Models = append(day.Models, row)
+		}
+		if len(d.hours) > 0 {
+			hours := make([]int, 0, len(d.hours))
+			for h := range d.hours {
+				hours = append(hours, h)
+			}
+			sort.Ints(hours)
+			for _, h := range hours {
+				x := d.hours[h]
+				day.Hours = append(day.Hours, Hour{Hour: h, Tokens: x.tokens, CostUSD: costPtr(x.priced, x.cost)})
+			}
 		}
 		sortModels(day.Models)
 		out = append(out, day)
@@ -287,6 +402,20 @@ func sortModels(rows []ModelRow) {
 // DayKey is the local calendar day of t.
 func DayKey(t time.Time) string { return t.Local().Format("2006-01-02") }
 
+// ProjectName labels the workspace a run recorded. The last path segment is what people call the
+// project, and a full path would not fit the legend; an absent or root path names nothing.
+func ProjectName(dir string) string {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return ""
+	}
+	name := filepath.Base(strings.TrimRight(dir, `/\`))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return ""
+	}
+	return name
+}
+
 // HistoryWindow is how far back each local reader keeps individual turns. The panel shows at most the
 // last 30 days, so anything older is not retained: on an agent-heavy machine the alternative is
 // keeping every turn ever written in memory and re-aggregating it on each refresh.
@@ -319,7 +448,9 @@ type Period struct {
 	Models         []ModelRow `json:"models"`
 	// Sources splits the period's tokens by where they were measured.
 	Sources []SourceRow `json:"sources,omitempty"`
-	HasData bool        `json:"hasData"`
+	// Kinds totals the token kinds of the rows that reported them.
+	Kinds   *Kinds `json:"kinds,omitempty"`
+	HasData bool   `json:"hasData"`
 }
 
 // Summarize merges the given days into one period.
@@ -329,6 +460,8 @@ func Summarize(label string, days []Day, include func(string) bool) Period {
 	priced := false
 	unknown := map[string]bool{}
 	models := map[string]*ModelRow{}
+	var kinds Kinds
+	kindsSet := false
 	for _, d := range days {
 		if !include(d.Date) {
 			continue
@@ -347,16 +480,25 @@ func Summarize(label string, days []Day, include func(string) bool) Period {
 			unknown[u] = true
 		}
 		for _, m := range d.Models {
-			row := models[m.Name]
+			key := m.Name
+			if m.Project != "" {
+				key += "\x00" + m.Project
+			}
+			row := models[key]
 			if row == nil {
 				provider := m.Provider
 				if provider == "" {
 					provider = ProviderOf(m.Name)
 				}
-				row = &ModelRow{Name: m.Name, Provider: provider, Source: SourceOf(m.Name), CostComplete: true}
-				models[m.Name] = row
+				row = &ModelRow{Name: m.Name, Provider: provider, Source: SourceOf(m.Name), Project: m.Project, CostComplete: true}
+				models[key] = row
 			}
 			row.Tokens = satAdd(row.Tokens, m.Tokens)
+			if m.Kinds != nil {
+				row.Kinds = mergeKinds(row.Kinds, *m.Kinds)
+				kinds.add(*m.Kinds)
+				kindsSet = true
+			}
 			if m.CostUSD != nil {
 				c := *m.CostUSD
 				if row.CostUSD != nil {
@@ -371,6 +513,9 @@ func Summarize(label string, days []Day, include func(string) bool) Period {
 	if priced {
 		p.CostUSD = &cost
 	}
+	if kindsSet {
+		p.Kinds = &kinds
+	}
 	p.UnknownModels = setList(unknown)
 	for _, r := range models {
 		p.Models = append(p.Models, *r)
@@ -378,6 +523,16 @@ func Summarize(label string, days []Day, include func(string) bool) Period {
 	sortModels(p.Models)
 	p.Sources = summarizeSources(p.Models)
 	return p
+}
+
+// mergeKinds adds a row's kinds to an accumulator, allocating on first use.
+func mergeKinds(into *Kinds, add Kinds) *Kinds {
+	if into == nil {
+		out := add
+		return &out
+	}
+	into.add(add)
+	return into
 }
 
 func mergeVariants(into, add []Variant) []Variant {

@@ -40,6 +40,8 @@ type Turn struct {
 	At         time.Time
 	ResponseID string
 	Model      string
+	// Cwd is the working directory the rollout recorded for its session, when it recorded one.
+	Cwd        string
 	Input      int64
 	Cached     int64
 	CacheWrite int64
@@ -55,6 +57,8 @@ type Scanner struct {
 	// unreadable is how many rollouts the last scan could not read, so a caller can say that its
 	// totals are missing their usage instead of only writing a log line.
 	unreadable int
+	// files is how many rollouts the last scan found, for the source-health list.
+	files int
 }
 
 type cachedFile struct {
@@ -155,6 +159,7 @@ func (s *Scanner) Scan(ctx context.Context, now time.Time, p *pricing.Snapshot) 
 		}
 	}
 	s.unreadable = unreadable
+	s.files = len(present)
 	if unreadable > 0 {
 		log.Printf("codex: %d session rollout(s) could not be read", unreadable)
 	}
@@ -166,6 +171,13 @@ func (s *Scanner) Unreadable() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.unreadable
+}
+
+// FileCount reports how many session rollouts the last scan found.
+func (s *Scanner) FileCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.files
 }
 
 func turnTime(t Turn) time.Time { return t.At }
@@ -185,6 +197,7 @@ func readRollout(ctx context.Context, path string) ([]Turn, error) {
 	var recordHadExactModel []bool
 	modelByTurn := map[string]string{}
 	var activeModel string
+	var cwd string
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
@@ -201,6 +214,10 @@ func readRollout(ctx context.Context, path string) ([]Turn, error) {
 		}
 		at, hasTime := parseTime(entry.Timestamp)
 		switch entry.Type {
+		case "session_meta":
+			if entry.Payload.Cwd != "" {
+				cwd = entry.Payload.Cwd
+			}
 		case "turn_context":
 			if entry.Payload.Model != "" {
 				activeModel = entry.Payload.Model
@@ -223,7 +240,7 @@ func readRollout(ctx context.Context, path string) ([]Turn, error) {
 				model = activeModel
 			}
 			records = append(records, Turn{
-				At: at, ResponseID: entry.Payload.ResponseID, Model: model,
+				At: at, ResponseID: entry.Payload.ResponseID, Model: model, Cwd: cwd,
 				Input: entry.Payload.Usage.Input, Cached: entry.Payload.Usage.Cached,
 				CacheWrite: entry.Payload.Usage.CacheWrite, Output: entry.Payload.Usage.Output,
 			})
@@ -241,7 +258,7 @@ func readRollout(ctx context.Context, path string) ([]Turn, error) {
 				continue
 			}
 			deltas = append(deltas, Turn{
-				At: at, Model: activeModel,
+				At: at, Model: activeModel, Cwd: cwd,
 				Input: d.Input, Cached: d.Cached, CacheWrite: d.CacheWrite, Output: d.Output,
 			})
 		}
@@ -277,6 +294,7 @@ type rolloutLine struct {
 		ResponseID string    `json:"response_id"`
 		TurnID     string    `json:"turn_id"`
 		Model      string    `json:"model"`
+		Cwd        string    `json:"cwd"`
 		Usage      usageJSON `json:"usage"`
 		Info       struct {
 			Last usageJSON `json:"last_token_usage"`
@@ -347,9 +365,20 @@ func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
 				cost = &c
 			}
 		}
-		acc.Add(day, total, cost, name, "")
+		acc.AddProject(day, total, cost, name, "", usage.ProjectName(t.Cwd), tokenKinds(t))
+		acc.AddHour(day, t.At.Hour(), total, cost)
 	}
 	return acc.Build()
+}
+
+// tokenKinds splits a receipt into the displayed kinds. Codex's input already includes cached and
+// cache-write tokens, so those are taken out of Input rather than counted twice.
+func tokenKinds(t Turn) usage.Kinds {
+	uncached := t.Input - t.Cached - t.CacheWrite
+	if uncached < 0 {
+		uncached = 0
+	}
+	return usage.Kinds{Input: uncached, Output: t.Output, CacheRead: t.Cached, CacheWrite: t.CacheWrite}
 }
 
 // tokens is Codex's own total: input already includes the cached tokens, output already includes

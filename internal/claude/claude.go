@@ -38,10 +38,13 @@ func DefaultRoot() string {
 
 // Turn is one measured model response.
 type Turn struct {
-	At          time.Time
-	MessageID   string
-	ModelID     string
-	Model       string
+	At        time.Time
+	MessageID string
+	ModelID   string
+	Model     string
+	// Cwd is the working directory Claude Code recorded for the response. It names the project
+	// when one is present; the field is absent in older transcripts.
+	Cwd         string
 	Input       int64
 	Output      int64
 	CacheCreate int64
@@ -57,6 +60,8 @@ type Scanner struct {
 	// unreadable is how many transcripts the last scan could not read, so a caller can say that
 	// its totals are missing their usage instead of only writing a log line.
 	unreadable int
+	// files is how many transcripts the last scan found, for the source-health list.
+	files int
 }
 
 type cachedFile struct {
@@ -171,6 +176,7 @@ func (s *Scanner) Scan(ctx context.Context, now time.Time, p *pricing.Snapshot) 
 		}
 	}
 	s.unreadable = unreadable
+	s.files = len(present)
 	if unreadable > 0 {
 		log.Printf("claude: %d transcript(s) could not be read", unreadable)
 	}
@@ -182,6 +188,13 @@ func (s *Scanner) Unreadable() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.unreadable
+}
+
+// FileCount reports how many transcripts the last scan found.
+func (s *Scanner) FileCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.files
 }
 
 func turnTime(t Turn) time.Time { return t.At }
@@ -240,6 +253,7 @@ type transcriptLine struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
 	SessionID string `json:"sessionId"`
+	Cwd       string `json:"cwd"`
 	Message   struct {
 		ID    string `json:"id"`
 		Model string `json:"model"`
@@ -278,6 +292,7 @@ func parseLine(line []byte) (Turn, bool) {
 	}
 	return Turn{
 		At: at, MessageID: entry.Message.ID, ModelID: entry.Message.Model, Model: entry.Message.Model,
+		Cwd:   entry.Cwd,
 		Input: u.Input, Output: u.Output, CacheCreate: u.CacheCreate, CacheRead: u.CacheRead,
 	}, true
 }
@@ -333,9 +348,15 @@ func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
 				}
 			}
 		}
-		acc.Add(day, total, cost, name, "")
+		acc.AddProject(day, total, cost, name, "", usage.ProjectName(t.Cwd), Kinds(t))
+		acc.AddHour(day, t.At.Hour(), total, cost)
 	}
 	return acc.Build()
+}
+
+// Kinds is this response's token split: cache creation is Claude's cache-write figure.
+func Kinds(t Turn) usage.Kinds {
+	return usage.Kinds{Input: t.Input, Output: t.Output, CacheRead: t.CacheRead, CacheWrite: t.CacheCreate}
 }
 
 func totalTokens(t Turn) (int64, bool) {

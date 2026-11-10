@@ -25,13 +25,25 @@ export interface Variant {
   costComplete: boolean;
 }
 
+/** How a model spent its measured tokens. Reasoning is informational and sits inside output. */
+export interface Kinds {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning?: number;
+}
+
 export interface ModelRow {
   name: string;
   provider?: string;
   source?: string;
+  /** Workspace the run belonged to, when its reader recorded one. */
+  project?: string;
   tokens: number;
   costUsd?: number;
   costComplete: boolean;
+  kinds?: Kinds;
   variants?: Variant[];
 }
 
@@ -49,6 +61,8 @@ export interface Period {
   unknownModels?: string[];
   models: ModelRow[];
   sources?: SourceRow[];
+  /** Token kinds across the rows that reported them, absent when no source did. */
+  kinds?: Kinds;
   hasData: boolean;
 }
 
@@ -58,6 +72,25 @@ export interface Day {
   costUsd?: number;
   costComplete: boolean;
   partial: boolean;
+  /** The day's per-model rows, used for the period comparison's movers. */
+  models?: ModelRow[];
+}
+
+/** One local hour-of-week bucket; the engine sends 168 of them, Sunday 00:00 first. */
+export interface Slot {
+  tokens: number;
+  costUsd?: number;
+  costComplete: boolean;
+}
+
+/** One reader's coverage from the last refresh. */
+export interface SourceHealth {
+  name: string;
+  files: number;
+  unreadable: number;
+  state: "ok" | "partial" | "error" | "missing" | "signed-out" | "cached" | string;
+  detail?: string;
+  lastReadAt?: string;
 }
 
 export interface Snapshot {
@@ -70,6 +103,10 @@ export interface Snapshot {
   periods?: Period[];
   /** Per-day totals for the last 30 days, oldest first. */
   days?: Day[];
+  /** Usage of the retained window by local weekday and hour, Sunday 00:00 first. */
+  slots?: Slot[];
+  /** What each local reader found, so a gap can be traced to one store. */
+  sources?: SourceHealth[];
   sourceNote?: string;
 }
 
@@ -84,6 +121,13 @@ export interface Preferences {
   theme: Theme;
   /** False when the user turned session countdowns off. */
   showTimers: boolean;
+  showHistory: boolean;
+  /** Monthly spending ceiling in dollars; 0 turns the budget line off. */
+  budgetUsd: number;
+  /** What the menu bar or tray tooltip shows. */
+  trayTitle: TrayTitle;
+  /** Reveals the project grouping in the model mix. */
+  showProjects: boolean;
   autoUpdate: AutoUpdate;
   version: string;
   platform: string;
@@ -104,3 +148,6 @@ export interface UpdateStatus {
 }
 
 export type ValueMode = "tokens" | "cost";
+
+/** Menu bar / tray tooltip figure: the session countdown, hours, tokens, cost or nothing. */
+export type TrayTitle = "session" | "hours" | "tokens" | "cost" | "none";

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge, copyText, errorMessage } from "../lib/api";
+import { toCsv } from "../lib/days";
+import { formatAgo, formatMoney } from "../lib/format";
 import { plainNotes } from "../lib/notes";
-import type { AutoUpdate, Preferences, Theme, UpdateStatus } from "../lib/types";
+import type { AutoUpdate, Day, Preferences, SourceHealth, Theme, TrayTitle, UpdateStatus } from "../lib/types";
 import { BackIcon, CheckIcon, ExternalIcon } from "./Icons";
 
 type Props = {
@@ -10,6 +12,15 @@ type Props = {
   onTheme: (theme: Theme) => Promise<void>;
   showTimers: boolean;
   onShowTimers: (on: boolean) => Promise<void>;
+  showHistory: boolean;
+  onShowHistory: (on: boolean) => Promise<void>;
+  budgetUsd: number;
+  onBudget: (usd: number) => Promise<void>;
+  showProjects: boolean;
+  onShowProjects: (on: boolean) => Promise<void>;
+  sources?: SourceHealth[];
+  /** Retained daily rollups, so the CSV copy works without the engine (browser preview). */
+  days?: Day[];
   onBack: () => void;
   onQuit: () => void;
 };
@@ -25,6 +36,21 @@ const POLICIES: { value: AutoUpdate; label: string; note: string }[] = [
   { value: "notify", label: "Notify", note: "FreeTokens will check daily and name a new release." },
   { value: "auto", label: "Auto-install", note: "FreeTokens will check daily and install verified releases." },
 ];
+const TRAY_TITLES: { value: TrayTitle; label: string; note: string }[] = [
+  { value: "session", label: "Session", note: "The menu bar shows the session countdown." },
+  { value: "hours", label: "Hours", note: "The menu bar shows the hours left today." },
+  { value: "tokens", label: "Tokens", note: "The menu bar shows today's measured tokens." },
+  { value: "cost", label: "Cost", note: "The menu bar shows today's estimated cost." },
+  { value: "none", label: "None", note: "The menu bar shows only the icon." },
+];
+const SOURCE_TINT: Record<string, string> = {
+  ok: "bg-brand",
+  partial: "bg-warn",
+  cached: "bg-warn",
+  error: "bg-danger",
+  missing: "bg-track",
+  "signed-out": "bg-track",
+};
 
 function policyHint(policy: AutoUpdate): string {
   switch (policy) {
@@ -42,7 +68,23 @@ function versionLabel(version: string): string {
   return `v${version.replace(/^v/, "")}`;
 }
 
-export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBack, onQuit }: Props) {
+export function Settings({
+  demo,
+  theme,
+  onTheme,
+  showTimers,
+  onShowTimers,
+  showHistory,
+  onShowHistory,
+  budgetUsd,
+  onBudget,
+  showProjects,
+  onShowProjects,
+  sources,
+  days,
+  onBack,
+  onQuit,
+}: Props) {
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -50,7 +92,14 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [budgetInput, setBudgetInput] = useState(budgetUsd > 0 ? String(budgetUsd) : "");
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // The value lives in the panel, which also reads it after a save; keep the field in step.
+  useEffect(() => {
+    setBudgetInput(budgetUsd > 0 ? String(budgetUsd) : "");
+  }, [budgetUsd]);
 
   useEffect(() => {
     if (!bridge) {
@@ -59,6 +108,10 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
         startAtLogin: false,
         theme: "dark",
         showTimers: true,
+        showHistory: false,
+        budgetUsd: 250,
+        trayTitle: "session",
+        showProjects: false,
         autoUpdate: "off",
         version: "preview",
         platform: "browser",
@@ -139,6 +192,94 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
       setSaving(false);
     }
   }, [demo, saving, showTimers, onShowTimers]);
+
+  // Demo mode still toggles, so the preview can show both states; only a real run persists it.
+  const saveHistory = useCallback(async () => {
+    if (saving) return;
+    const next = !showHistory;
+    setSaving(true);
+    setNote(null);
+    try {
+      await onShowHistory(next);
+      setNote({ kind: "ok", text: next ? "Usage history shown." : "Usage history hidden." });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, showHistory, onShowHistory]);
+
+  const saveBudget = useCallback(async () => {
+    if (saving) return;
+    const parsed = Number(budgetInput.trim().replace(/[$,\s]/g, ""));
+    if (budgetInput.trim() !== "" && (!Number.isFinite(parsed) || parsed < 0)) {
+      setNote({ kind: "error", text: "The budget must be a non-negative amount, or empty to turn it off." });
+      return;
+    }
+    const next = budgetInput.trim() === "" ? 0 : parsed;
+    setSaving(true);
+    setNote(null);
+    try {
+      await onBudget(next);
+      setNote({
+        kind: "ok",
+        text: next > 0 ? `Monthly budget set to ${formatMoney(next)}.` : "Budget line turned off.",
+      });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [budgetInput, onBudget, saving]);
+
+  const saveTrayTitle = useCallback(
+    async (next: TrayTitle) => {
+      if (!prefs || saving || next === prefs.trayTitle) return;
+      const previous = prefs.trayTitle;
+      setPrefs({ ...prefs, trayTitle: next });
+      setSaving(true);
+      setNote(null);
+      try {
+        if (bridge) await bridge.SetTrayTitle(next);
+        const saved = TRAY_TITLES.find((option) => option.value === next);
+        setNote({ kind: "ok", text: saved ? saved.note : "Menu bar setting saved." });
+      } catch (error) {
+        setPrefs((current) => (current ? { ...current, trayTitle: previous } : current));
+        setNote({ kind: "error", text: errorMessage(error) });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [prefs, saving],
+  );
+
+  const saveProjects = useCallback(async () => {
+    if (saving) return;
+    const next = !showProjects;
+    setSaving(true);
+    setNote(null);
+    try {
+      await onShowProjects(next);
+      setNote({ kind: "ok", text: next ? "Project grouping shown in the model mix." : "Project grouping hidden." });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [onShowProjects, saving, showProjects]);
+
+  const exportCsv = useCallback(async () => {
+    setExporting(true);
+    setNote(null);
+    try {
+      await copyText(bridge ? await bridge.ExportCSV() : toCsv(days ?? []));
+      setNote({ kind: "ok", text: "Daily usage copied as CSV." });
+    } catch (error) {
+      setNote({ kind: "error", text: errorMessage(error) });
+    } finally {
+      setExporting(false);
+    }
+  }, [days]);
 
   const savePolicy = useCallback(
     async (next: AutoUpdate) => {
@@ -280,6 +421,42 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
               </p>
             </section>
 
+            <section aria-labelledby="budget-heading" className="mt-4 border-t border-line/70 pt-3">
+              <h2 id="budget-heading" className="text-[12px] font-medium text-muted">
+                Monthly budget
+              </h2>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                Compares the rolling 30-day estimate with a ceiling. Empty turns the line off.
+              </p>
+              <form
+                className="mt-2 flex items-center gap-1.5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveBudget();
+                }}
+              >
+                <label className="flex h-[30px] min-w-0 flex-1 items-center gap-1 rounded-[8px] bg-panel px-2">
+                  <span className="text-[11px] text-faint">$</span>
+                  <span className="sr-only">Monthly budget in dollars</span>
+                  <input
+                    value={budgetInput}
+                    onChange={(event) => setBudgetInput(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="250"
+                    disabled={saving}
+                    className="min-w-0 flex-1 bg-transparent text-[12px] text-ink tnum outline-none placeholder:text-faint disabled:opacity-60"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={saving || budgetInput === (budgetUsd > 0 ? String(budgetUsd) : "")}
+                  className="h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
+                >
+                  Save
+                </button>
+              </form>
+            </section>
+
             <section aria-labelledby="appearance-heading" className="mt-4 border-t border-line/70 pt-3">
               <h2 id="appearance-heading" className="text-[12px] font-medium text-muted">
                 Appearance
@@ -368,6 +545,143 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
                   />
                 </button>
               </div>
+            </section>
+
+            <section aria-labelledby="tray-title-heading" className="mt-4 border-t border-line/70 pt-3">
+              <h2 id="tray-title-heading" className="text-[12px] font-medium text-muted">
+                Menu bar figure
+              </h2>
+              <div role="group" aria-label="Menu bar figure" className="mt-2 grid grid-cols-5 gap-1">
+                {TRAY_TITLES.map((option) => {
+                  const active = prefs.trayTitle === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={saving}
+                      onClick={() => void saveTrayTitle(option.value)}
+                      className={`h-[30px] rounded-[8px] text-[10px] font-medium transition-colors ${
+                        active
+                          ? "bg-raised text-ink"
+                          : "bg-panel text-muted hover:text-ink disabled:hover:text-muted"
+                      } disabled:opacity-60`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
+                macOS draws this next to the icon; other systems show it in the tray tooltip. The
+                countdown still needs the session timer on.
+              </p>
+            </section>
+
+            <section aria-labelledby="history-heading" className="mt-4 border-t border-line/70 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="history-heading" className="text-[12px] font-medium text-muted">
+                    Usage history
+                  </h2>
+                  <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                    Shows the 14-day strip and the previous-period comparison above the model mix.
+                    The movers and the hour grid always show.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showHistory}
+                  aria-labelledby="history-heading"
+                  disabled={saving}
+                  onClick={() => void saveHistory()}
+                  className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                    showHistory ? "bg-brand" : "bg-track"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-[3px] h-4 w-4 rounded-full bg-shell transition-[left] motion-reduce:transition-none ${
+                      showHistory ? "left-[19px]" : "left-[3px]"
+                    }`}
+                  />
+                </button>
+              </div>
+            </section>
+
+            <section aria-labelledby="projects-heading" className="mt-4 border-t border-line/70 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="projects-heading" className="text-[12px] font-medium text-muted">
+                    Project grouping
+                  </h2>
+                  <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                    Adds a Project view to the mix, from the workspace each run recorded.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showProjects}
+                  aria-labelledby="projects-heading"
+                  disabled={saving}
+                  onClick={() => void saveProjects()}
+                  className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                    showProjects ? "bg-brand" : "bg-track"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-[3px] h-4 w-4 rounded-full bg-shell transition-[left] motion-reduce:transition-none ${
+                      showProjects ? "left-[19px]" : "left-[3px]"
+                    }`}
+                  />
+                </button>
+              </div>
+            </section>
+
+            <section aria-labelledby="sources-heading" className="mt-4 border-t border-line/70 pt-3">
+              <h2 id="sources-heading" className="text-[12px] font-medium text-muted">
+                Usage sources
+              </h2>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
+                What each reader found on the last refresh, so a missing total has an address.
+              </p>
+              {sources && sources.length > 0 ? (
+                <ul className="mt-2 space-y-1.5">
+                  {sources.map((source) => (
+                    <li key={source.name} className="flex items-start gap-2 text-[10.5px]">
+                      <span
+                        aria-hidden="true"
+                        className={`mt-[4px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                          SOURCE_TINT[source.state] ?? "bg-track"
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate font-medium text-muted">{source.name}</span>
+                          <span className="shrink-0 text-faint tnum">
+                            {source.files > 0
+                              ? `${source.files} file${source.files === 1 ? "" : "s"}`
+                              : "none found"}
+                          </span>
+                        </span>
+                        {source.detail ? (
+                          <span className="mt-0.5 block text-faint" title={source.detail}>
+                            {source.detail}
+                          </span>
+                        ) : null}
+                        {source.lastReadAt ? (
+                          <span className="mt-0.5 block text-[10px] text-faint">
+                            Last read {formatAgo(source.lastReadAt, Date.now())}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[10.5px] text-faint">Sources appear after the first refresh.</p>
+              )}
             </section>
 
             <section aria-labelledby="updates-heading" className="mt-4 border-t border-line/70 pt-3">
@@ -490,14 +804,28 @@ export function Settings({ demo, theme, onTheme, showTimers, onShowTimers, onBac
               <p className="mt-0.5 text-[10.5px] leading-snug text-faint">
                 Copies the same text `freetokens status` prints, for a bug report.
               </p>
-              <button
-                type="button"
-                disabled={demo || copying}
-                onClick={() => void copyStatus()}
-                className="mt-2 h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
-              >
-                {copying ? "Copying…" : "Copy status"}
-              </button>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={demo || copying}
+                  onClick={() => void copyStatus()}
+                  className="h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
+                >
+                  {copying ? "Copying…" : "Copy status"}
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting}
+                  onClick={() => void exportCsv()}
+                  className="h-[30px] rounded-[8px] bg-panel px-2.5 text-[10.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-60"
+                >
+                  {exporting ? "Copying…" : "Copy daily CSV"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-faint">
+                The CSV is one row per local day with tokens, estimated cost and whether either was
+                complete. <code>freetokens export --csv</code> prints the same rows.
+              </p>
             </section>
 
             {!demo ? (

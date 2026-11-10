@@ -461,6 +461,8 @@ type DesktopScanner struct {
 	// to open. Both are surfaced separately rather than silently undercounting usage.
 	unreadable    int
 	unreadableDBs int
+	// found is how many history databases the last scan saw, for source health.
+	found int
 }
 
 // Unreadable reports how many local history rows the last scan skipped for having no identifier
@@ -476,6 +478,13 @@ func (s *DesktopScanner) UnreadableDatabases() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.unreadableDBs
+}
+
+// DatabaseCount reports how many history databases the last scan found.
+func (s *DesktopScanner) DatabaseCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.found
 }
 
 // HasHistory reports whether any project database exists.
@@ -531,6 +540,7 @@ func (s *DesktopScanner) Scan(ctx context.Context, now time.Time, p *pricing.Sna
 	if err != nil {
 		return nil, ErrLocalHistory
 	}
+	s.found = len(paths)
 	known := map[string]bool{}
 	for _, p := range paths {
 		known[p] = true
@@ -733,7 +743,10 @@ func fold(groups [][]*turn, now time.Time, p *pricing.Snapshot, catalog map[stri
 			if legacy {
 				group = ""
 			}
-			acc.Add(day, total, cost, model, group)
+			acc.AddKinds(day, total, cost, model, group, usage.Kinds{
+				Input: input - cached, Output: output, CacheRead: cached, Reasoning: reasoning,
+			})
+			acc.AddHour(day, at.Hour(), total, cost)
 			// An unpriced history row stays a lower bound via Add's cost= nil; only a
 			// nameless route is worth a warning.
 			if cost == nil && !legacy && res.DisplayName == "" {

@@ -67,6 +67,25 @@ export function BackIcon({ className }: IconProps) {
   );
 }
 
+export function InfoIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="8" cy="8" r="5.7" />
+      <path d="M8 7.3v3.4" />
+      <path d="M8 5.2h.01" />
+    </svg>
+  );
+}
+
+export function CopyIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="5.7" y="5.7" width="7.7" height="7.7" rx="1.3" />
+      <path d="M10.3 3.3H4.7a1.4 1.4 0 0 0-1.4 1.4v5.6" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
