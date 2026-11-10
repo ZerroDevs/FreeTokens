@@ -204,6 +204,16 @@ struct SettingsView: View {
         }
     }
 
+    /// "7 files", "signed in", "signed out", or "none found" when a reader saw nothing.
+    private func sourceCount(_ source: SourceHealth) -> String {
+        if source.files > 0 { return "\(source.files) file\(source.files == 1 ? "" : "s")" }
+        switch source.state {
+        case "signed-out": return "signed out"
+        case "ok", "cached": return "signed in"
+        default: return "none found"
+        }
+    }
+
     private func sourceRow(_ source: SourceHealth) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
@@ -215,7 +225,8 @@ struct SettingsView: View {
                     Text(source.name)
                         .font(.system(size: Theme.label, weight: .medium))
                     Spacer(minLength: 8)
-                    Text(source.files > 0 ? "\(source.files) file\(source.files == 1 ? "" : "s")" : "none found")
+                    // The hosted reader owns no files; its state, not a count, says whether it answered.
+                    Text(sourceCount(source))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }

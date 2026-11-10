@@ -69,18 +69,17 @@ export function Donut({
   const visible = slices.filter((slice) => slice.value > 0 && Number.isFinite(slice.value));
   let cursor = 0;
 
+  // Budget money reaches "$1,234.56", which a fixed 20px clips to "$244...." inside the ring.
+  const value = activeValue ?? centerValue;
+  const valueSize = value.length > 8 ? "text-[13px]" : value.length > 6 ? "text-[16px]" : "text-[20px]";
+  const width = onHoleClick ? "max-w-[74px]" : "max-w-[92px]";
+
   const text = (
     <>
-      <span
-        className={`truncate text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink tnum ${
-          onHoleClick ? "max-w-[68px]" : "max-w-[92px]"
-        }`}
-      >
-        {activeValue ?? centerValue}
+      <span className={`truncate leading-none font-semibold tracking-[-0.02em] text-ink tnum ${valueSize} ${width}`}>
+        {value}
       </span>
-      <span className={`mt-1 truncate text-[10px] text-faint ${onHoleClick ? "max-w-[68px]" : "max-w-[92px]"}`}>
-        {activeLabel ?? centerLabel}
-      </span>
+      <span className={`mt-1 truncate text-[10px] text-faint ${width}`}>{activeLabel ?? centerLabel}</span>
     </>
   );
 
