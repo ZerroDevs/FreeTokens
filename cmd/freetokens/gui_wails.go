@@ -168,8 +168,9 @@ func (a *App) trayReady() {
 	a.showItem = systray.AddMenuItem("Show FreeTokens", "Open the usage popover")
 	refresh := systray.AddMenuItem("Refresh Now", "Refresh now (may ask for keychain access)")
 	dashboard := systray.AddMenuItem("Open Freebuff Account", freebuff.DashboardURL)
-	// The strip is off by default, so the popover leads with the selected period until asked for more.
-	history := systray.AddMenuItemCheckbox("Usage History", "Show the 14-day strip in the popover", a.cfg.Load().ShowHistory)
+	// The history views are off by default, so the popover leads with the selected period until
+	// asked for more. This one checkbox is their only switch, here and in Settings.
+	history := systray.AddMenuItemCheckbox("Usage History", "Show the history strip, comparison and by-hour grid in the popover", a.cfg.Load().ShowHistory)
 	a.mu.Lock()
 	a.historyItem = history
 	a.mu.Unlock()
@@ -436,8 +437,9 @@ func (a *App) ExportCSV() (string, error) {
 	return usage.CSV(snap.Days), nil
 }
 
-// SetShowHistory saves whether the popover shows the 14-day strip. The tray menu writes the same
-// setting, and whichever surface saves it tells the other one.
+// SetShowHistory saves whether the popover shows the history views: the 30-day card and comparison
+// above the mix, the hour-of-week grid below the movers. The tray menu writes the same setting, and
+// whichever surface saves it tells the other one.
 func (a *App) SetShowHistory(on bool) error {
 	if _, err := a.cfg.Update(func(c *config.Config) { c.ShowHistory = on }); err != nil {
 		return err

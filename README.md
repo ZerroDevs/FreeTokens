@@ -240,12 +240,13 @@ under it. The breakdown below repeats the split per model when **Token kinds** i
 shows the rolling 30-day estimate against it, e.g. `~$155 of $250 · 62%`, and the ring's hole
 switches to what is left when clicked. Zero or an empty field turns the line off.
 
-**Movers and hours** need no switch: under the period tabs the mix names the models that changed
-most against the previous window, and an hour-of-week heatmap says when usage happens. Every heatmap
-cell names its weekday, hour and value on hover. Only readers that dated individual turns contribute
-hours, so a store that records only daily totals leaves the heatmap short rather than inventing a
-time. **Usage history** (opt-in, off by default) adds just the **Last 30 Days** bar card and the
-previous-period comparison, directly under the mix.
+**Movers** need no switch: under the period tabs the mix names the models that changed most against
+the previous window. **Usage history** (opt-in, off by default) is one switch for all three history
+views — the **Last 30 Days** bar card and the previous-period comparison directly under the mix, and
+the hour-of-week heatmap below the movers. Turn it off and the panel is back to the period mix alone.
+Every heatmap cell names its weekday, hour and value on hover. Only readers that dated individual
+turns contribute hours, so a store that records only daily totals leaves the heatmap short rather
+than inventing a time.
 
 **Settings → Usage sources** lists each reader with the inputs it found, when it last read them and
 why a count is short (unreadable files, a failed read, no sign-in), which turns *totals may be
@@ -386,7 +387,7 @@ freetokens config set theme system        # dark | light | sand | system | custo
 freetokens config set accent-color "#ff2d55"  # saves a colour and picks the custom theme
 freetokens config set budget-usd 250          # 0 turns the budget line off
 freetokens config set tray-title tokens       # session | hours | tokens | cost | none
-freetokens config set show-history true       # the 30-day bars and the period comparison, under the mix
+freetokens config set show-history true       # the 30-day bars, the comparison and the by-hour grid
 freetokens config set show-projects true      # the Project grouping in the mix
 ```
 `freetokens config reset` puts every key back to its shipped default, which is the quick way out

@@ -69,7 +69,7 @@ struct SettingsView: View {
             group("Usage") {
                 toggleRow("Show Project Grouping", isOn: Binding(get: { model.settings.showProjects }, set: { model.setShowProjects($0) }))
                 RowDivider()
-                toggleRow("Show 30-Day Trend", isOn: Binding(get: { model.settings.showHistory }, set: { model.setShowHistory($0) }))
+                toggleRow("Show Usage History", isOn: Binding(get: { model.settings.showHistory }, set: { model.setShowHistory($0) }))
                 RowDivider()
                 HStack(spacing: 8) {
                     Text("Monthly Ceiling").font(.system(size: Theme.label))

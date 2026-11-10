@@ -114,12 +114,12 @@ export function UsageView({
               }
             />
           ) : null}
-          {/* Movers and the hour grid are not the optional history views, so they keep their own
-              place below the mix instead of hiding behind that switch. */}
           {period ? (
             <Movers label={period.label} days={snapshot.days ?? []} now={now} mode={mode} />
           ) : null}
-          {snapshot.slots ? <WeekHeatmap slots={snapshot.slots} mode={mode} /> : null}
+          {/* The by-hour grid is a history view too, so it answers to the same switch as the
+              strip and the comparison: off by default, all three appear together. */}
+          {showHistory && snapshot.slots ? <WeekHeatmap slots={snapshot.slots} mode={mode} /> : null}
           <button
             type="button"
             aria-expanded={true}

@@ -63,8 +63,9 @@ type Config struct {
 	RefreshMinutes int `json:"refreshMinutes"`
 	// ShowTimers puts the earliest active session countdown in the tray title (where supported).
 	ShowTimers bool `json:"showTimers"`
-	// ShowHistory adds the 14-day strip and the previous-period comparison to the popover above the
-	// model mix. Off by default: the popover leads with the selected period.
+	// ShowHistory adds the history views to the popover: the 30-day bar card and the previous-period
+	// comparison above the model mix, and the hour-of-week grid below the movers. Off by default:
+	// the popover leads with the selected period.
 	ShowHistory bool `json:"showHistory"`
 	// BudgetUSD is the monthly spending ceiling the popover measures the last 30 days against.
 	// Zero disables the budget line. It is always written: the macOS app decodes `config get`
