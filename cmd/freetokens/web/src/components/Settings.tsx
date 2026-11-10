@@ -440,7 +440,11 @@ export function Settings({
                   <span className="sr-only">Monthly budget in dollars</span>
                   <input
                     value={budgetInput}
-                    onChange={(event) => setBudgetInput(event.target.value)}
+                    onChange={(event) => {
+                      setBudgetInput(event.target.value);
+                      // The last answer was about the value the user is now replacing.
+                      setNote(null);
+                    }}
                     inputMode="decimal"
                     placeholder="250"
                     disabled={saving}
@@ -662,7 +666,11 @@ export function Settings({
                           <span className="shrink-0 text-faint tnum">
                             {source.files > 0
                               ? `${source.files} file${source.files === 1 ? "" : "s"}`
-                              : "none found"}
+                              : source.state === "signed-out"
+                                ? "signed out"
+                                : source.state === "ok" || source.state === "cached"
+                                  ? "signed in"
+                                  : "none found"}
                           </span>
                         </span>
                         {source.detail ? (
