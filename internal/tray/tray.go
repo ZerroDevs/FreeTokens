@@ -71,12 +71,14 @@ type app struct {
 	periods                          []periodItems
 	refresh, dashboard               *systray.MenuItem
 	settings                         *systray.MenuItem
-	showTimers, login                *systray.MenuItem
-	updOff, updNotify, updAuto       *systray.MenuItem
-	intervals                        map[int]*systray.MenuItem
-	checkUpdate, installUpdate       *systray.MenuItem
-	about, quit                      *systray.MenuItem
-	lastWarn                         *bool
+	login                            *systray.MenuItem
+	// titles are the menu-bar/tooltip choice radios, keyed by config.TrayTitle values.
+	titles                     map[string]*systray.MenuItem
+	updOff, updNotify, updAuto *systray.MenuItem
+	intervals                  map[int]*systray.MenuItem
+	checkUpdate, installUpdate *systray.MenuItem
+	about, quit                *systray.MenuItem
+	lastWarn                   *bool
 }
 
 // Run blocks until the user quits.
@@ -151,10 +153,16 @@ func (a *app) onReady() {
 	a.installUpdate.Hide()
 
 	a.settings = systray.AddMenuItem("Settings", "")
-	// Only the macOS menu bar shows a title next to the icon; elsewhere the timer is in the tooltip.
-	// (The item is not created at all: Windows re-shows hidden items when their check state changes.)
-	if runtime.GOOS == "darwin" {
-		a.showTimers = a.settings.AddSubMenuItemCheckbox("Show Session Timer in Menu Bar", "", a.cfg.ShowTimers)
+	// macOS draws the chosen figure next to the icon; every other platform puts it in the tooltip.
+	a.titles = map[string]*systray.MenuItem{}
+	for _, choice := range []struct{ key, label string }{
+		{config.TraySession, "Menu Bar: Session Countdown"},
+		{config.TrayHours, "Menu Bar: Hours Left"},
+		{config.TrayTokens, "Menu Bar: Tokens Today"},
+		{config.TrayCost, "Menu Bar: Cost Today"},
+		{config.TrayNone, "Menu Bar: Nothing"},
+	} {
+		a.titles[choice.key] = a.settings.AddSubMenuItemCheckbox(choice.label, "", a.cfg.TrayTitle == choice.key)
 	}
 	a.login = a.settings.AddSubMenuItemCheckbox(loginLabel(), "", autostart.Enabled())
 	a.settings.AddSeparator()
@@ -215,8 +223,8 @@ func (a *app) syncSettings() {
 	a.mu.Lock()
 	c := a.cfg
 	a.mu.Unlock()
-	if a.showTimers != nil {
-		setCheck(a.showTimers, c.ShowTimers)
+	for choice, it := range a.titles {
+		setCheck(it, c.TrayTitle == choice)
 	}
 	setCheck(a.login, autostart.Enabled())
 	setCheck(a.updOff, c.AutoUpdate == config.UpdateOff)
@@ -254,9 +262,13 @@ func (a *app) clicks() {
 			}
 		}(m, it)
 	}
-	var timersCh chan struct{}
-	if a.showTimers != nil {
-		timersCh = a.showTimers.ClickedCh
+	titleCh := make(chan string)
+	for choice, it := range a.titles {
+		go func(choice string, it *systray.MenuItem) {
+			for range it.ClickedCh {
+				titleCh <- choice
+			}
+		}(choice, it)
 	}
 	for {
 		select {
@@ -266,8 +278,8 @@ func (a *app) clicks() {
 			_ = browser.Open(freebuff.DashboardURL)
 		case <-a.about.ClickedCh:
 			_ = browser.Open(repoURL)
-		case <-timersCh:
-			a.setConfig(func(c *config.Config) { c.ShowTimers = !c.ShowTimers })
+		case choice := <-titleCh:
+			a.setConfig(func(c *config.Config) { c.TrayTitle = choice })
 			a.render()
 		case <-a.login.ClickedCh:
 			a.toggleLogin()
@@ -373,7 +385,7 @@ func (a *app) timerLoop() {
 
 func (a *app) renderTimers() {
 	a.mu.Lock()
-	snap, show := a.snap, a.cfg.ShowTimers
+	snap, cfg := a.snap, a.cfg
 	a.mu.Unlock()
 	now := time.Now()
 	var q *freebuff.Quota
@@ -389,13 +401,12 @@ func (a *app) renderTimers() {
 			it.Hide()
 		}
 	}
-	title := ""
 	tooltip := []string{"FreeTokens"}
-	if exp, ok := view.NextExpiry(q, now); ok {
-		if show {
-			title = view.Clock(exp.Sub(now))
-		}
-		tooltip = append(tooltip, "Session: "+view.Duration(exp.Sub(now))+" left")
+	title, line := view.TrayTitle(snap, cfg.TrayTitle, cfg.ShowTimers, now)
+	// The session rows above already say how long each session has left, so the chosen figure's
+	// own line is only worth repeating for the other choices.
+	if line != "" && cfg.TrayTitle != config.TraySession {
+		tooltip = append(tooltip, line)
 	}
 	if snap != nil {
 		if lines := view.QuotaLines(snap.Quota, now); len(lines) > 0 {

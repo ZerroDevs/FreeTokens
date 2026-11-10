@@ -16,6 +16,7 @@ import (
 
 	"github.com/tverma101/FreeTokens/internal/antigravity"
 	"github.com/tverma101/FreeTokens/internal/claude"
+	"github.com/tverma101/FreeTokens/internal/codex"
 	"github.com/tverma101/FreeTokens/internal/freebuff"
 	"github.com/tverma101/FreeTokens/internal/opencode"
 	"github.com/tverma101/FreeTokens/internal/pricing"
@@ -189,6 +190,68 @@ func TestSignedOutFreebuffLeavesMeasuredSourcesComplete(t *testing.T) {
 	}
 }
 
+// The health list turns one joined warning into an address per reader: which store failed, which
+// found nothing, and which last answered. Only constructed readers appear, so a platform without
+// Antigravity is not reported as a gap.
+func TestSourceHealthNamesEachReadersCoverage(t *testing.T) {
+	now := time.Date(2026, 11, 7, 12, 0, 0, 0, time.Local)
+	at := now.Add(-time.Hour)
+	desktopRoot := t.TempDir()
+	corruptDesktopDB(t, desktopRoot, at)
+	claudeRoot := t.TempDir()
+	claudeTranscript(t, claudeRoot, at)
+
+	tr := &Tracker{
+		Auth:    noAuth(t),
+		Pricing: offlinePricing(t),
+		Catalog: &freebuff.ModelCatalog{CachePath: filepath.Join(t.TempDir(), "models.json")},
+		Desktop: &freebuff.DesktopScanner{Roots: []string{desktopRoot}},
+		Codex:   &codex.Scanner{Root: t.TempDir()},
+		Claude:  &claude.Scanner{Root: claudeRoot},
+		Now:     func() time.Time { return now },
+	}
+	snap := tr.Refresh(context.Background(), false)
+
+	health := map[string]SourceHealth{}
+	for _, row := range snap.Sources {
+		health[row.Name] = row
+	}
+	if got := health["Freebuff"]; got.State != "signed-out" {
+		t.Fatalf("Freebuff health = %+v, want signed-out", got)
+	}
+	if got := health["Freebuff Desktop"]; got.State != "error" {
+		t.Fatalf("Freebuff Desktop health = %+v, want error", got)
+	}
+	if got := health["Claude"]; got.State != "ok" || got.Files != 1 || got.LastReadAt == nil {
+		t.Fatalf("Claude health = %+v, want ok with one file and a read time", got)
+	}
+	if got := health["Codex"]; got.State != "missing" || got.Detail == "" {
+		t.Fatalf("Codex health = %+v, want missing with an explanation", got)
+	}
+	if _, ok := health["Antigravity"]; ok {
+		t.Fatalf("health = %+v, want no row for a reader that does not exist here", snap.Sources)
+	}
+	// The hour-of-week grid is built from the same dated turns.
+	if snap.Slots == nil {
+		t.Fatal("slots = nil, want the hour Claude's transcript recorded")
+	}
+	if got := snap.Slots[int(at.Weekday())*24+at.Hour()].Tokens; got != 150 {
+		t.Fatalf("slot %s %d:00 = %d tokens, want 150", at.Weekday(), at.Hour(), got)
+	}
+}
+
+// The detail ships in the settings list, so it has to read like a sentence: "1 input", not "1 input(s)".
+func TestHealthRowPluralizesUnreadableInputs(t *testing.T) {
+	one := healthRow("Claude", 3, 1, false, nil, "none")
+	if !strings.Contains(one.Detail, "1 input could not be read") {
+		t.Fatalf("detail = %q, want a singular input", one.Detail)
+	}
+	many := healthRow("Claude", 3, 2, false, nil, "none")
+	if !strings.Contains(many.Detail, "2 inputs could not be read") {
+		t.Fatalf("detail = %q, want a plural inputs", many.Detail)
+	}
+}
+
 // A source that skips a file still returns the days it could read. That loss has to reach the user,
 // which a log line does not do.
 func TestUnreadableSourceIsNamedInTheWarning(t *testing.T) {
@@ -211,7 +274,10 @@ func TestUnreadableSourceIsNamedInTheWarning(t *testing.T) {
 		Now:         func() time.Time { return now },
 	}
 	snap := tr.Refresh(context.Background(), false)
-	if !strings.Contains(snap.HistoryWarning, "1 Antigravity conversation database(s) couldn't be read") {
+	if !strings.Contains(snap.HistoryWarning, "1 Antigravity conversation database couldn't be read") {
 		t.Fatalf("warning = %q, want the unreadable conversation named", snap.HistoryWarning)
+	}
+	if strings.Contains(snap.HistoryWarning, "(s)") {
+		t.Fatalf("warning = %q, want a counted noun instead of (s)", snap.HistoryWarning)
 	}
 }

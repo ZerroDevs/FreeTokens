@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	goruntime "runtime"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"github.com/tverma101/FreeTokens/internal/notify"
 	"github.com/tverma101/FreeTokens/internal/tracker"
 	"github.com/tverma101/FreeTokens/internal/update"
+	"github.com/tverma101/FreeTokens/internal/usage"
 	"github.com/tverma101/FreeTokens/internal/view"
 )
 
@@ -93,14 +95,15 @@ type App struct {
 	version  string
 	notifier *notify.Notifier
 
-	mu         sync.Mutex
-	snap       *tracker.Snapshot
-	refreshing bool
-	visible    bool
-	quitting   bool
-	hideTimer  *time.Timer
-	showItem   *systray.MenuItem
-	wake       chan struct{}
+	mu          sync.Mutex
+	snap        *tracker.Snapshot
+	refreshing  bool
+	visible     bool
+	quitting    bool
+	hideTimer   *time.Timer
+	showItem    *systray.MenuItem
+	historyItem *systray.MenuItem
+	wake        chan struct{}
 
 	lastRefresh      time.Time
 	trayWarn         bool
@@ -165,6 +168,11 @@ func (a *App) trayReady() {
 	a.showItem = systray.AddMenuItem("Show FreeTokens", "Open the usage popover")
 	refresh := systray.AddMenuItem("Refresh Now", "Refresh now (may ask for keychain access)")
 	dashboard := systray.AddMenuItem("Open Freebuff Account", freebuff.DashboardURL)
+	// The strip is off by default, so the popover leads with the selected period until asked for more.
+	history := systray.AddMenuItemCheckbox("Usage History", "Show the 14-day strip in the popover", a.cfg.Load().ShowHistory)
+	a.mu.Lock()
+	a.historyItem = history
+	a.mu.Unlock()
 	settings := systray.AddMenuItem("Settings", "Refresh interval and login item")
 	systray.AddSeparator()
 	quit := systray.AddMenuItem(guiQuitLabel(), "")
@@ -181,6 +189,8 @@ func (a *App) trayReady() {
 				go a.refresh(true)
 			case <-dashboard.ClickedCh:
 				_ = browser.Open(freebuff.DashboardURL)
+			case <-history.ClickedCh:
+				a.toggleShowHistory()
 			case <-settings.ClickedCh:
 				a.openSettings()
 			case <-quit.ClickedCh:
@@ -251,12 +261,13 @@ func (a *App) updateTray(snap *tracker.Snapshot) {
 	if snap == nil || a.showItem == nil {
 		return
 	}
-	line := "FreeTokens"
-	if q := snap.Quota; q != nil {
-		if m := q.Meter("Daily Hours"); m != nil {
-			line = "FreeTokens · " + view.Hours(max0(m.Limit-m.Used)) + " left"
-		}
+	cfg := a.cfg.Load()
+	title, line := view.TrayTitle(snap, cfg.TrayTitle, cfg.ShowTimers, time.Now())
+	if line == "" {
+		line = "FreeTokens"
 	}
+	// The menu bar title only draws on macOS; the tooltip carries the same figure elsewhere.
+	systray.SetTitle(title)
 	systray.SetTooltip(line)
 	a.setTrayWarn(trayNeedsAttention(snap))
 }
@@ -295,13 +306,17 @@ func (a *App) OpenDashboard() error { return browser.Open(freebuff.DashboardURL)
 
 // Preferences holds the settings the popover exposes.
 type Preferences struct {
-	RefreshMinutes int    `json:"refreshMinutes"`
-	StartAtLogin   bool   `json:"startAtLogin"`
-	Theme          string `json:"theme"`
-	ShowTimers     bool   `json:"showTimers"`
-	AutoUpdate     string `json:"autoUpdate"`
-	Version        string `json:"version"`
-	Platform       string `json:"platform"`
+	RefreshMinutes int     `json:"refreshMinutes"`
+	StartAtLogin   bool    `json:"startAtLogin"`
+	Theme          string  `json:"theme"`
+	ShowTimers     bool    `json:"showTimers"`
+	ShowHistory    bool    `json:"showHistory"`
+	BudgetUSD      float64 `json:"budgetUsd"`
+	TrayTitle      string  `json:"trayTitle"`
+	ShowProjects   bool    `json:"showProjects"`
+	AutoUpdate     string  `json:"autoUpdate"`
+	Version        string  `json:"version"`
+	Platform       string  `json:"platform"`
 	// OpaqueWindow is true when the window has no transparent margin to blend (no compositor).
 	OpaqueWindow bool `json:"opaqueWindow"`
 }
@@ -313,6 +328,10 @@ func (a *App) GetPreferences() Preferences {
 		StartAtLogin:   autostart.Enabled(),
 		Theme:          cfg.Theme,
 		ShowTimers:     cfg.ShowTimers,
+		ShowHistory:    cfg.ShowHistory,
+		BudgetUSD:      cfg.BudgetUSD,
+		TrayTitle:      cfg.TrayTitle,
+		ShowProjects:   cfg.ShowProjects,
 		AutoUpdate:     cfg.AutoUpdate,
 		Version:        a.version,
 		Platform:       goruntime.GOOS,
@@ -352,6 +371,88 @@ func (a *App) SetTheme(theme string) error {
 func (a *App) SetShowTimers(on bool) error {
 	_, err := a.cfg.Update(func(c *config.Config) { c.ShowTimers = on })
 	return err
+}
+
+// SetBudgetUSD saves the spending ceiling the popover measures the last 30 days against. Zero
+// turns the budget line off.
+func (a *App) SetBudgetUSD(usd float64) error {
+	if math.IsNaN(usd) || math.IsInf(usd, 0) || usd < 0 {
+		return errors.New("budget must be a non-negative amount")
+	}
+	_, err := a.cfg.Update(func(c *config.Config) { c.BudgetUSD = usd })
+	return err
+}
+
+// SetTrayTitle saves what the menu bar or tray tooltip shows. The classic tray's menu writes the
+// same setting through its own checkboxes.
+func (a *App) SetTrayTitle(choice string) error {
+	switch choice {
+	case config.TraySession, config.TrayHours, config.TrayTokens, config.TrayCost, config.TrayNone:
+	default:
+		return errors.New("tray title must be session, hours, tokens, cost or none")
+	}
+	if _, err := a.cfg.Update(func(c *config.Config) { c.TrayTitle = choice }); err != nil {
+		return err
+	}
+	if snap := a.GetSnapshot(); snap != nil {
+		a.updateTray(snap)
+	}
+	return nil
+}
+
+// SetShowProjects reveals the project grouping in the popover. It changes no measured data.
+func (a *App) SetShowProjects(on bool) error {
+	_, err := a.cfg.Update(func(c *config.Config) { c.ShowProjects = on })
+	return err
+}
+
+// ExportCSV returns the retained daily rollups as CSV for the copy button.
+func (a *App) ExportCSV() (string, error) {
+	snap := a.GetSnapshot()
+	if snap == nil {
+		return "", errors.New("no usage has been read yet")
+	}
+	return usage.CSV(snap.Days), nil
+}
+
+// SetShowHistory saves whether the popover shows the 14-day strip. The tray menu writes the same
+// setting, and whichever surface saves it tells the other one.
+func (a *App) SetShowHistory(on bool) error {
+	if _, err := a.cfg.Update(func(c *config.Config) { c.ShowHistory = on }); err != nil {
+		return err
+	}
+	a.syncHistoryItem(on)
+	return nil
+}
+
+// syncHistoryItem keeps the tray checkbox in step with the popover and asks an open popover to
+// re-read its preferences.
+func (a *App) syncHistoryItem(on bool) {
+	a.mu.Lock()
+	item := a.historyItem
+	ctx := a.ctx
+	a.mu.Unlock()
+	if item != nil {
+		if on {
+			item.Check()
+		} else {
+			item.Uncheck()
+		}
+	}
+	if ctx != nil {
+		runtime.EventsEmit(ctx, "prefs")
+	}
+}
+
+// toggleShowHistory flips the strip from the tray menu, where the item cannot report its own state
+// until the click is processed.
+func (a *App) toggleShowHistory() {
+	on := !a.cfg.Load().ShowHistory
+	if _, err := a.cfg.Update(func(c *config.Config) { c.ShowHistory = on }); err != nil {
+		log.Printf("prefs: %v", err)
+		return
+	}
+	a.syncHistoryItem(on)
 }
 
 func (a *App) SetStartAtLogin(on bool) error {

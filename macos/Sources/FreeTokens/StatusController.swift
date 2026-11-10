@@ -86,18 +86,41 @@ final class StatusController: NSObject {
         updateStatusItem()
     }
 
-    /// Icon (with a warning dot when something needs attention) and the earliest session countdown.
+    /// Icon (with a warning dot when something needs attention) and the figure chosen in Settings.
+    /// A choice whose data is missing shows nothing rather than a stale or invented number.
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
         let snapshot = model.snapshot
         let warning = model.engineError != nil || (snapshot?.quotaError != nil && snapshot?.quota == nil)
         button.image = MenuBarIcon.image(warning: warning)
-        var title = ""
-        if model.settings.showTimers, let next = model.activeSessions(at: Date()).first {
-            title = " " + Format.duration(next.timeIntervalSinceNow)
-        }
+        let title = menuBarTitle(snapshot)
         if button.title != title { button.title = title }
         button.toolTip = tooltip(snapshot)
+    }
+
+    private func menuBarTitle(_ snapshot: Snapshot?) -> String {
+        switch model.settings.trayTitle {
+        case "none":
+            return ""
+        case "hours":
+            guard let meter = snapshot?.quota?.meters?.first(where: { $0.label == "Daily Hours" }) else { return "" }
+            return " \(Format.number(meter.remaining)) h"
+        case "tokens":
+            guard let today = snapshot?.periods?.first, today.hasData else { return "" }
+            return " " + Format.tokens(today.tokens)
+        case "cost":
+            guard let today = snapshot?.periods?.first, today.hasData, let cost = today.costUsd else { return "" }
+            return " " + costText(cost, lowerBound: today.costLowerBound)
+        default:
+            guard model.settings.showTimers, let next = model.activeSessions(at: Date()).first else { return "" }
+            return " " + Format.duration(next.timeIntervalSinceNow)
+        }
+    }
+
+    /// Format.usd already prefixes "≥" for a lower bound, so "~" only applies to the exact figure;
+    /// stacking both reads as "~≥$2.50".
+    private func costText(_ cost: Double, lowerBound: Bool) -> String {
+        (lowerBound ? "" : "~") + Format.usd(cost, lowerBound: lowerBound)
     }
 
     private func tooltip(_ snapshot: Snapshot?) -> String {
@@ -107,8 +130,13 @@ final class StatusController: NSObject {
         } else if let error = snapshot?.quotaError ?? model.engineError {
             lines.append(error)
         }
-        if let next = model.activeSessions(at: Date()).first {
+        // The countdown is already the menu bar title unless another figure was chosen.
+        if model.settings.trayTitle != "session", let next = model.activeSessions(at: Date()).first {
             lines.append("Session: \(Format.duration(next.timeIntervalSinceNow)) left")
+        }
+        if let today = snapshot?.periods?.first, today.hasData {
+            let cost = today.costUsd.map { costText($0, lowerBound: today.costLowerBound) } ?? "no price yet"
+            lines.append("Today: \(Format.tokens(today.tokens)) tokens · \(cost)")
         }
         return lines.joined(separator: "\n")
     }

@@ -5,14 +5,35 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: AppModel
 
+    @State private var budgetText = ""
+    @State private var budgetNote: String?
+    @State private var dataNote: String?
+
     private static let refreshChoices = [1, 2, 5, 10, 15, 30, 60]
+    private static let trayChoices: [(value: String, label: String)] = [
+        ("session", "Session Countdown"),
+        ("hours", "Hours Left"),
+        ("tokens", "Tokens Today"),
+        ("cost", "Cost Today"),
+        ("none", "Nothing"),
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             group("General") {
                 toggleRow("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
                 RowDivider()
-                toggleRow("Session Timer in Menu Bar", isOn: Binding(get: { model.settings.showTimers }, set: { model.setShowTimers($0) }))
+                toggleRow("Session Timer in Hours Card", isOn: Binding(get: { model.settings.showTimers }, set: { model.setShowTimers($0) }))
+                RowDivider()
+                row("Menu Bar Figure") {
+                    Picker("Menu Bar Figure", selection: Binding(get: { model.settings.trayTitle }, set: { model.setTrayTitle($0) })) {
+                        ForEach(Self.trayChoices, id: \.value) { choice in
+                            Text(choice.label).tag(choice.value)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
                 RowDivider()
                 row("Refresh Every") {
                     Picker("Refresh Every", selection: Binding(get: { model.settings.refreshMinutes }, set: { model.setRefreshMinutes($0) })) {
@@ -32,6 +53,48 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .fixedSize()
+                }
+            }
+            group("Usage") {
+                toggleRow("Show Project Grouping", isOn: Binding(get: { model.settings.showProjects }, set: { model.setShowProjects($0) }))
+                RowDivider()
+                toggleRow("Show 30-Day Trend", isOn: Binding(get: { model.settings.showHistory }, set: { model.setShowHistory($0) }))
+                RowDivider()
+                HStack(spacing: 8) {
+                    Text("Monthly Ceiling").font(.system(size: Theme.label))
+                    Spacer(minLength: 8)
+                    Text("$").foregroundStyle(.secondary)
+                    TextField("None", text: $budgetText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 76)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Monthly ceiling in dollars")
+                        .onSubmit { saveBudget() }
+                    Button("Save") { saveBudget() }
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                if let budgetNote {
+                    Text(budgetNote)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.notice)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 6)
+                }
+            }
+            group("Sources") {
+                if let sources = model.snapshot?.sources, !sources.isEmpty {
+                    ForEach(Array(sources.enumerated()), id: \.element.id) { index, source in
+                        if index > 0 { RowDivider() }
+                        sourceRow(source)
+                    }
+                } else {
+                    Text("Sources appear after the first refresh.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                 }
             }
             group("Updates") {
@@ -58,6 +121,19 @@ struct SettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.notice)
                     .padding(.horizontal, 4)
+            }
+            group("Data") {
+                HStack(spacing: 8) {
+                    Text(dataNote ?? "One row per local day with tokens, estimated cost and completeness.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button("Copy CSV") { copyCSV() }
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             }
             group("About") {
                 HStack(spacing: 10) {
@@ -87,6 +163,85 @@ struct SettingsView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
             }
+        }
+        .onAppear {
+            budgetText = model.settings.budgetUsd > 0 ? Format.number(model.settings.budgetUsd) : ""
+        }
+        .onChange(of: model.settings.budgetUsd) { value in
+            budgetText = value > 0 ? Format.number(value) : ""
+        }
+    }
+
+    private func saveBudget() {
+        let cleaned = budgetText
+            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        if cleaned.isEmpty {
+            budgetNote = nil
+            model.setBudget(0)
+            return
+        }
+        guard let amount = Double(cleaned), amount.isFinite, amount >= 0 else {
+            budgetNote = "Enter a non-negative amount, or leave the field empty."
+            return
+        }
+        budgetNote = nil
+        model.setBudget(amount)
+    }
+
+    private func copyCSV() {
+        Task {
+            do {
+                let csv = try await model.exportCSV()
+                let board = NSPasteboard.general
+                board.clearContents()
+                board.setString(csv, forType: .string)
+                dataNote = "Daily usage copied as CSV."
+            } catch {
+                dataNote = error.localizedDescription
+            }
+        }
+    }
+
+    private func sourceRow(_ source: SourceHealth) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(tint(source.state))
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(source.name)
+                        .font(.system(size: Theme.label, weight: .medium))
+                    Spacer(minLength: 8)
+                    Text(source.files > 0 ? "\(source.files) file\(source.files == 1 ? "" : "s")" : "none found")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                if let detail = source.detail {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let read = source.lastReadAt {
+                    Text("Last read \(Format.ago(read))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+    }
+
+    private func tint(_ state: String) -> Color {
+        switch state {
+        case "ok": return Theme.positive
+        case "partial", "cached": return Theme.notice
+        case "error": return Color(nsColor: .systemRed)
+        default: return Color.primary.opacity(0.25)
         }
     }
 

@@ -71,10 +71,16 @@ struct DashboardView: View {
             }
             FreebuffSection(model: model)
             if let snapshot = model.snapshot, !(snapshot.periods ?? []).isEmpty {
-                UsageSection(snapshot: snapshot)
+                UsageSection(
+                    snapshot: snapshot,
+                    budgetUsd: model.settings.budgetUsd,
+                    showProjects: model.settings.showProjects
+                )
             }
-            if let days = model.snapshot?.days, days.contains(where: { $0.tokens > 0 }) {
-                TrendSection(days: days)
+            // Off by default, like the popover's history strip: the panel leads with the period mix.
+            if model.settings.showHistory,
+               let days = model.snapshot?.days, days.contains(where: { $0.tokens > 0 }) {
+                TrendSection(days: days, slots: model.snapshot?.slots)
             }
         }
     }

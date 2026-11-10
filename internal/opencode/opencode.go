@@ -117,6 +117,22 @@ func (s *Scanner) Scan(ctx context.Context, now time.Time, p *pricing.Snapshot) 
 	return Fold(turns, now, p), nil
 }
 
+// FileCount reports whether the last scan had a database to read, for the source-health list.
+func (s *Scanner) FileCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Path == "" {
+		s.Path = DatabasePath()
+	}
+	if s.Path == "" {
+		return 0
+	}
+	if st, err := os.Stat(s.Path); err == nil && !st.IsDir() {
+		return 1
+	}
+	return 0
+}
+
 // revisionOf describes the database together with its write-ahead log, so a message committed
 // while OpenCode has the file open still invalidates the cache.
 func revisionOf(path string) revision {
@@ -326,16 +342,27 @@ func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
 				}
 			}
 		}
+		kinds := tokenKinds(t)
 		switch {
 		case provider != "":
-			acc.AddServed(day, total, cost, name, "", provider)
+			acc.AddServedKinds(day, total, cost, name, "", provider, kinds)
 		case ownProvider(t.ProviderID):
-			acc.AddOwned(day, total, cost, name, "", Zen)
+			acc.AddOwnedKinds(day, total, cost, name, "", Zen, kinds)
 		default:
-			acc.Add(day, total, cost, name, "")
+			acc.AddKinds(day, total, cost, name, "", kinds)
 		}
+		acc.AddHour(day, t.At.Hour(), total, cost)
 	}
 	return acc.Build()
+}
+
+// tokenKinds is OpenCode's reported split. Reasoning is counted inside Output so the kinds add up to
+// the row total, and stays visible as its own informational figure.
+func tokenKinds(t Turn) usage.Kinds {
+	return usage.Kinds{
+		Input: t.Input, Output: t.Output + t.Reasoning, Reasoning: t.Reasoning,
+		CacheRead: t.CacheRead, CacheWrite: t.CacheWrite,
+	}
 }
 
 // ownProvider reports whether a provider id names OpenCode itself. Its Zen models exist in no public

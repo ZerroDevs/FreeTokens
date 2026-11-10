@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -82,6 +83,118 @@ func TestPeriodsAndLowerBounds(t *testing.T) {
 	}
 	if aRow == nil || aRow.Tokens != 130 || len(aRow.Variants) != 2 {
 		t.Fatalf("grouped row = %+v", aRow)
+	}
+}
+
+// A row's kinds must add up to its token total, merging must sum them, and a row from a source that
+// reported no split keeps a nil Kinds rather than a misleading zero.
+func TestKindsMergeAndStayConsistentWithTokens(t *testing.T) {
+	now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.Local)
+	today := DayKey(now)
+	var a Accumulator
+	a.AddKinds(today, 100, f(1), "A", "", Kinds{Input: 40, Output: 20, CacheRead: 35, CacheWrite: 5})
+	a.AddKinds(today, 50, f(1), "B", "", Kinds{Input: 10, Output: 30, CacheRead: 10})
+	a.Add(today, 10, nil, "C", "")
+	period := StandardPeriods(a.Build(), now)[0]
+	want := Kinds{Input: 50, Output: 50, CacheRead: 45, CacheWrite: 5}
+	if period.Kinds == nil || *period.Kinds != want {
+		t.Fatalf("period kinds = %+v, want %+v", period.Kinds, want)
+	}
+	for _, row := range period.Models {
+		switch row.Name {
+		case "C":
+			if row.Kinds != nil {
+				t.Fatalf("row C kinds = %+v, want nil", row.Kinds)
+			}
+		default:
+			if row.Kinds == nil {
+				t.Fatalf("row %s lost its kinds", row.Name)
+			}
+			k := *row.Kinds
+			if k.Input+k.Output+k.CacheRead+k.CacheWrite != row.Tokens {
+				t.Fatalf("row %s kinds %+v do not sum to %d tokens", row.Name, k, row.Tokens)
+			}
+		}
+	}
+}
+
+// Projects split one model's usage per workspace, which is what the opt-in project grouping reads.
+func TestProjectsStaySeparateRows(t *testing.T) {
+	now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.Local)
+	today := DayKey(now)
+	var a Accumulator
+	a.AddProject(today, 10, f(0.1), "Claude · Sonnet 4.6", "", "web", Kinds{Input: 10})
+	a.AddProject(today, 30, f(0.3), "Claude · Sonnet 4.6", "", "api", Kinds{Input: 30})
+	a.AddProject(today, 5, f(0.05), "Claude · Sonnet 4.6", "", "", Kinds{Input: 5})
+	period := StandardPeriods(a.Build(), now)[0]
+	if len(period.Models) != 3 {
+		t.Fatalf("models = %+v, want one row per project plus the unprojected one", period.Models)
+	}
+	projects := map[string]int64{}
+	for _, row := range period.Models {
+		projects[row.Project] = row.Tokens
+	}
+	if projects["web"] != 10 || projects["api"] != 30 || projects[""] != 5 {
+		t.Fatalf("project tokens = %v", projects)
+	}
+}
+
+// The hour-of-week grid uses the local weekday of the day key and keeps cost complete only where
+// every contributing hour was priced.
+func TestBuildSlotsUsesLocalWeekdayAndHour(t *testing.T) {
+	sunday := time.Date(2026, 11, 8, 10, 0, 0, 0, time.Local)
+	key := DayKey(sunday)
+	var a Accumulator
+	a.Add(key, 40, f(1), "A", "")
+	a.AddHour(key, 10, 40, f(1))
+	slots := BuildSlots(a.Build())
+	if slots == nil {
+		t.Fatal("slots = nil, want the measured hour")
+	}
+	slot := slots[int(time.Sunday)*24+10]
+	if slot.Tokens != 40 || slot.CostUSD == nil || *slot.CostUSD != 1 || !slot.CostComplete {
+		t.Fatalf("Sunday 10:00 = %+v", slot)
+	}
+	if (*slots)[int(time.Sunday)*24+11].Tokens != 0 {
+		t.Fatal("an unmeasured hour must stay empty")
+	}
+}
+
+func TestBuildSlotsWithoutHoursIsNil(t *testing.T) {
+	now := time.Date(2026, 11, 6, 9, 0, 0, 0, time.Local)
+	var a Accumulator
+	a.Add(DayKey(now), 10, nil, "A", "")
+	if BuildSlots(a.Build()) != nil {
+		t.Fatal("a day rollup without hours must not invent a slot")
+	}
+}
+
+func TestCSVWritesOldestFirstAndLeavesUnpricedCostEmpty(t *testing.T) {
+	days := []Day{
+		{Date: "2026-11-06", Tokens: 20, CostUSD: f(0.5), CostComplete: true},
+		{Date: "2026-11-05", Tokens: 10, CostComplete: false, Partial: true},
+	}
+	got := CSV(days)
+	want := "date,tokens,cost_usd,cost_complete,partial\n" +
+		"2026-11-05,10,,false,true\n" +
+		"2026-11-06,20,0.5000,true,false\n"
+	if got != want {
+		t.Fatalf("csv =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestProjectNameUsesLastPathSegment(t *testing.T) {
+	sep := string(filepath.Separator)
+	cases := map[string]string{
+		"":                    "",
+		"/Users/me/code/web/": "web",
+		"work" + sep + "api":  "api",
+		"single":              "single",
+	}
+	for dir, want := range cases {
+		if got := ProjectName(dir); got != want {
+			t.Fatalf("ProjectName(%q) = %q, want %q", dir, got, want)
+		}
 	}
 }
 

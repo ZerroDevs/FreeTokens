@@ -206,6 +206,7 @@ prerequisites and options.
 freetokens            # popover when a desktop session exists, otherwise a status report
 freetokens tray       # classic tray / menu bar menu
 freetokens status     # one-off report; --json for scripts
+freetokens export --csv   # the retained daily rollups as CSV
 freetokens autostart on   # on Windows this registers freetokensw.exe
 freetokens launcher install   # Linux: add an app-menu entry
 ```
@@ -225,6 +226,31 @@ Tokens (estimated at public API rates)
 ```
 
 The screenshots and sample above use demo data.
+
+## What the panel shows
+
+The panel leads with today's hours, then a period picker over the token mix: a ring of each model's
+share, the period's total in the middle, and a legend beside it. Hovering a slice points the legend
+at it, and **Copy** puts the mix on the clipboard. The menu beside the title switches between token
+and cost values, groups rows by **Tool**, **Provider** or (opt-in) **Project**, and can split the
+ring into **Token kinds** — cache reads, input, output and cache writes — with the cache-hit rate
+under it. The breakdown below repeats the split per model when **Token kinds** is expanded there.
+
+**Monthly budget.** Set a ceiling in **Settings** (`freetokens config set budget-usd 250`); the mix
+shows the rolling 30-day estimate against it, e.g. `~$155 of $250 · 62%`, and the ring's hole
+switches to what is left when clicked. Zero or an empty field turns the line off.
+
+**Movers and hours** need no switch: under the period tabs the mix names the models that changed
+most against the previous window, and an hour-of-week heatmap says when usage happens. Every heatmap
+cell names its weekday, hour and value on hover. Only readers that dated individual turns contribute
+hours, so a store that records only daily totals leaves the heatmap short rather than inventing a
+time. **Usage history** (opt-in, off by default) adds just the 14-day strip and the previous-period
+comparison above the mix.
+
+**Settings → Usage sources** lists each reader with the inputs it found, when it last read them and
+why a count is short (unreadable files, a failed read, no sign-in), which turns *totals may be
+incomplete* into something actionable. **Copy daily CSV** copies the same rows `freetokens export
+--csv` prints: one row per local day with tokens, estimated cost and completeness flags.
 
 You need to have signed in once with the Freebuff CLI (`freebuff login`). FreeTokens reads the
 CLI's existing `default` profile and never signs in, starts a session, or changes your account. It
@@ -341,12 +367,21 @@ directory, update it the way you installed it.
 | Diagnostics | `freetokens diagnose` prints paths, auth state and numeric quota fields, never tokens |
 
 The popover's **Settings** panel holds the refresh interval, **Start at login**, the panel theme
-(dark by default, light, or **System** to follow the OS appearance), the update policy with
-**Skip this version**, and **Copy status**, which puts the `freetokens status` report on the
-clipboard for a bug report. The macOS app's **Settings** has the same **Appearance** choice and
-reads it from the same `theme` key, so one setting covers both. The interval and theme also work
-from the command line:
-`freetokens config set refresh-minutes 15` and `freetokens config set theme system`.
+(dark by default, light, or **System** to follow the OS appearance), the monthly budget, the
+**Menu bar figure** (session countdown, hours left, tokens today, cost today or nothing), the
+usage history and project-grouping switches, the update policy with **Skip this version**, the
+per-source health list, and **Copy status** / **Copy daily CSV** for a bug report or a spreadsheet.
+The macOS app's **Settings** has the same choices, read from the same keys, so one setting covers
+both. They also work from the command line:
+
+```bash
+freetokens config set refresh-minutes 15
+freetokens config set theme system
+freetokens config set budget-usd 250          # 0 turns the budget line off
+freetokens config set tray-title tokens       # session | hours | tokens | cost | none
+freetokens config set show-history true       # the 14-day strip, comparison and heatmap
+freetokens config set show-projects true      # the Project grouping in the mix
+```
 `freetokens config reset` puts every key back to its shipped default, which is the quick way out
 of a stuck update skip or a hand-edited file, and `freetokens config path` prints the file to edit
 by hand (with a note when it doesn't exist yet and the defaults are in effect).

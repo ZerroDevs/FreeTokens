@@ -3,6 +3,7 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -26,6 +27,15 @@ const (
 	ThemeSystem = "system"
 )
 
+// Menu bar and tray title choices. "session" keeps the countdown the tray has always shown.
+const (
+	TraySession = "session"
+	TrayHours   = "hours"
+	TrayTokens  = "tokens"
+	TrayCost    = "cost"
+	TrayNone    = "none"
+)
+
 // Config is persisted as JSON in the user config directory.
 type Config struct {
 	// AutoUpdate is "off" (default), "notify" (check daily, never install) or "auto" (check daily
@@ -35,6 +45,19 @@ type Config struct {
 	RefreshMinutes int `json:"refreshMinutes"`
 	// ShowTimers puts the earliest active session countdown in the tray title (where supported).
 	ShowTimers bool `json:"showTimers"`
+	// ShowHistory adds the 14-day strip and the previous-period comparison to the popover above the
+	// model mix. Off by default: the popover leads with the selected period.
+	ShowHistory bool `json:"showHistory"`
+	// BudgetUSD is the monthly spending ceiling the popover measures the last 30 days against.
+	// Zero disables the budget line. It is always written: the macOS app decodes `config get`
+	// directly, and a missing key would fail its whole settings load.
+	BudgetUSD float64 `json:"budgetUsd"`
+	// TrayTitle is what the menu bar (macOS) or tray tooltip shows: session, hours, tokens, cost
+	// or none.
+	TrayTitle string `json:"trayTitle"`
+	// ShowProjects reveals the project grouping in the model mix. Off by default because only some
+	// local listeners record which project a run belonged to.
+	ShowProjects bool `json:"showProjects"`
 	// Theme is "dark" (default), "light" or "system" (follow the OS appearance).
 	Theme string `json:"theme"`
 	// LastUpdateCheck records the last automatic check.
@@ -45,7 +68,7 @@ type Config struct {
 
 // Defaults returns the initial configuration.
 func Defaults() Config {
-	return Config{AutoUpdate: UpdateOff, RefreshMinutes: 5, ShowTimers: true, Theme: ThemeDark}
+	return Config{AutoUpdate: UpdateOff, RefreshMinutes: 5, ShowTimers: true, Theme: ThemeDark, TrayTitle: TraySession}
 }
 
 // Normalize clamps invalid values back to defaults.
@@ -65,6 +88,14 @@ func (c *Config) Normalize() {
 	case ThemeDark, ThemeLight, ThemeSystem:
 	default:
 		c.Theme = ThemeDark
+	}
+	switch c.TrayTitle {
+	case TraySession, TrayHours, TrayTokens, TrayCost, TrayNone:
+	default:
+		c.TrayTitle = TraySession
+	}
+	if math.IsNaN(c.BudgetUSD) || math.IsInf(c.BudgetUSD, 0) || c.BudgetUSD < 0 {
+		c.BudgetUSD = 0
 	}
 }
 

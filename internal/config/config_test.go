@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -27,6 +28,40 @@ func TestThemeDefaultsToDarkAndRoundTrips(t *testing.T) {
 	}
 	if got := store.Load().Theme; got != ThemeLight {
 		t.Fatalf("saved theme = %q, want %q", got, ThemeLight)
+	}
+}
+
+// A budget the popover cannot use must never load: negative, infinite and NaN amounts all disable
+// the line, and an unknown menu-bar choice falls back to the session countdown.
+func TestBudgetAndTrayTitleNormalize(t *testing.T) {
+	store := &Store{Path: filepath.Join(t.TempDir(), "config.json")}
+	if got := store.Load().TrayTitle; got != TraySession {
+		t.Fatalf("default tray title = %q, want %q", got, TraySession)
+	}
+	if err := os.WriteFile(store.Path, []byte(`{"budgetUsd":-12.5,"trayTitle":"bogus"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded := store.Load()
+	if loaded.BudgetUSD != 0 || loaded.TrayTitle != TraySession {
+		t.Fatalf("normalized = budget %v, tray %q", loaded.BudgetUSD, loaded.TrayTitle)
+	}
+	for _, bad := range []float64{math.NaN(), math.Inf(1), -1} {
+		c := Config{BudgetUSD: bad, TrayTitle: TrayTokens}
+		c.Normalize()
+		if c.BudgetUSD != 0 {
+			t.Fatalf("budget %v normalized to %v, want 0", bad, c.BudgetUSD)
+		}
+	}
+	if _, err := store.Update(func(c *Config) {
+		c.BudgetUSD = 250
+		c.TrayTitle = TrayCost
+		c.ShowProjects = true
+	}); err != nil {
+		t.Fatal(err)
+	}
+	saved := store.Load()
+	if saved.BudgetUSD != 250 || saved.TrayTitle != TrayCost || !saved.ShowProjects {
+		t.Fatalf("saved = %+v", saved)
 	}
 }
 

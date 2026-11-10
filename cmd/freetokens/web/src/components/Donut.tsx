@@ -5,58 +5,128 @@ type Props = {
   total: number;
   centerValue: string;
   centerLabel: string;
+  /** Slice the legend is pointing at; it lifts off the ring so one share is easy to follow. */
+  active?: string | null;
+  /** Shown in the hole instead of the total while a slice is active. */
+  activeValue?: string | null;
+  activeLabel?: string | null;
+  /** Hovering a slice points the legend at it, so the ring and the list read as one control. */
+  onHover?: (name: string | null) => void;
+  /** Makes the hole a button: the mix switches between the total and the budget remaining. */
+  onHoleClick?: () => void;
+  /** Accessible name and tooltip for the hole button. */
+  holeHint?: string;
 };
 
-const SIZE = 128;
-const RADIUS = 50;
-const STROKE = 17;
-const CIRC = 2 * Math.PI * RADIUS;
-// A sliver of empty track between slices, so neighbouring colors of similar weight stay readable.
-const GAP = 2.5;
+const SIZE = 132;
+const CENTER = SIZE / 2;
+const OUTER = 61.5;
+const INNER = 42.5;
+const GROW = 1.05;
+// Half the dark seam between neighbours, in degrees. Equal angles keep every seam the same width,
+// which stroked dashes could not: their butt caps meet at radial edges and drift with rounding.
+const SEAM = 1.1;
+const MIN_SPAN = 0.5;
+const HOLE = INNER * 2 - 8;
 
-export function Donut({ slices, total, centerValue, centerLabel }: Props) {
+const point = (radius: number, degrees: number) => {
+  const rad = ((degrees - 90) * Math.PI) / 180;
+  return [CENTER + radius * Math.cos(rad), CENTER + radius * Math.sin(rad)];
+};
+
+function sectorPath(start: number, end: number): string {
+  const mid = (start + end) / 2;
+  const half = Math.max((end - start) / 2 - SEAM, MIN_SPAN / 2);
+  const from = mid - half;
+  const to = mid + half;
+  const large = to - from > 180 ? 1 : 0;
+  const [ix0, iy0] = point(INNER, from);
+  const [ox0, oy0] = point(OUTER, from);
+  const [ox1, oy1] = point(OUTER, to);
+  const [ix1, iy1] = point(INNER, to);
+  return [
+    `M${ix0} ${iy0}`,
+    `L${ox0} ${oy0}`,
+    `A${OUTER} ${OUTER} 0 ${large} 1 ${ox1} ${oy1}`,
+    `L${ix1} ${iy1}`,
+    `A${INNER} ${INNER} 0 ${large} 0 ${ix0} ${iy0}`,
+    "Z",
+  ].join(" ");
+}
+
+export function Donut({
+  slices,
+  total,
+  centerValue,
+  centerLabel,
+  active = null,
+  activeValue = null,
+  activeLabel = null,
+  onHover,
+  onHoleClick,
+  holeHint,
+}: Props) {
   const visible = slices.filter((slice) => slice.value > 0 && Number.isFinite(slice.value));
   let cursor = 0;
 
+  const text = (
+    <>
+      <span
+        className={`truncate text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink tnum ${
+          onHoleClick ? "max-w-[68px]" : "max-w-[92px]"
+        }`}
+      >
+        {activeValue ?? centerValue}
+      </span>
+      <span className={`mt-1 truncate text-[10px] text-faint ${onHoleClick ? "max-w-[68px]" : "max-w-[92px]"}`}>
+        {activeLabel ?? centerLabel}
+      </span>
+    </>
+  );
+
   return (
-    <div className="relative grid h-[128px] w-[128px] shrink-0 place-items-center">
+    <div className="relative grid h-[132px] w-[132px] shrink-0 place-items-center">
       <svg
         width={SIZE}
         height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         aria-hidden="true"
         focusable="false"
-        className="-rotate-90"
       >
-        <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="var(--color-track)" strokeWidth={STROKE} />
+        <circle cx={CENTER} cy={CENTER} r={(OUTER + INNER) / 2} fill="none" stroke="var(--color-track)" strokeWidth={OUTER - INNER} />
         {visible.map((slice) => {
-          const fraction = total > 0 ? slice.value / total : 0;
-          const length = Math.max(0, fraction * CIRC - GAP);
-          const offset = cursor;
-          cursor += fraction * CIRC;
+          const start = cursor;
+          cursor += total > 0 ? (slice.value / total) * 360 : 0;
+          const focused = active !== null && slice.name === active;
           return (
-            <circle
+            <path
               key={slice.name}
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              fill="none"
-              stroke={slice.color}
-              strokeWidth={STROKE}
-              strokeDasharray={`${length} ${CIRC - length}`}
-              strokeDashoffset={-offset}
-            >
-              <title>{slice.name}</title>
-            </circle>
+              d={sectorPath(start, cursor)}
+              fill={slice.color}
+              pointerEvents={onHover ? "auto" : "none"}
+              onPointerEnter={() => onHover?.(slice.name)}
+              style={{ transformOrigin: `${CENTER}px ${CENTER}px`, transform: focused ? `scale(${GROW})` : "scale(1)" }}
+              className="transition-transform duration-150 motion-reduce:transition-none"
+            />
           );
         })}
       </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="max-w-[84px] truncate text-[20px] leading-none font-semibold tracking-[-0.02em] text-ink tnum">
-          {centerValue}
-        </span>
-        <span className="mt-1 text-[10px] text-faint">{centerLabel}</span>
-      </div>
+      {onHoleClick ? (
+        <button
+          type="button"
+          onClick={onHoleClick}
+          aria-label={holeHint ?? centerLabel}
+          title={holeHint}
+          className="absolute top-1/2 left-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full transition-colors hover:bg-shell/70"
+          style={{ width: HOLE, height: HOLE }}
+        >
+          <span className="flex flex-col items-center justify-center">{text}</span>
+        </button>
+      ) : (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          {text}
+        </div>
+      )}
     </div>
   );
 }

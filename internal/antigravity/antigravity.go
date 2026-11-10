@@ -95,6 +95,8 @@ type Scanner struct {
 	// missing or where its per-day split is approximate.
 	unreadable int
 	paired     pairing
+	// files is how many conversation databases the last scan found, for source health.
+	files int
 }
 
 type cachedConversation struct {
@@ -224,7 +226,7 @@ func (s *Scanner) Scan(ctx context.Context, now time.Time, p *pricing.Snapshot) 
 			stats.matched++
 		}
 	}
-	s.unreadable, s.paired = unreadable, stats
+	s.unreadable, s.paired, s.files = unreadable, stats, len(present)
 	if unreadable > 0 {
 		log.Printf("antigravity: %d conversation database(s) could not be read", unreadable)
 	}
@@ -258,7 +260,8 @@ func Fold(turns []Turn, now time.Time, p *pricing.Snapshot) []usage.Day {
 				}
 			}
 		}
-		acc.Add(day, total, cost, name, "")
+		acc.AddKinds(day, total, cost, name, "", usage.Kinds{Input: t.Input, Output: t.Output, CacheRead: t.CacheRead})
+		acc.AddHour(day, t.At.Hour(), total, cost)
 	}
 	return acc.Build()
 }
@@ -335,6 +338,13 @@ func (s *Scanner) Unreadable() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.unreadable
+}
+
+// FileCount reports how many conversation databases the last scan found.
+func (s *Scanner) FileCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.files
 }
 
 // Placement reports how the last scan dated its generations: how many had no step with matching
