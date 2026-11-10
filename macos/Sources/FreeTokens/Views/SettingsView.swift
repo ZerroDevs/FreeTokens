@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var budgetText = ""
     @State private var budgetNote: String?
     @State private var dataNote: String?
+    @State private var showAllSources = false
 
     private static let refreshChoices = [1, 2, 5, 10, 15, 30, 60]
     private static let trayChoices: [(value: String, label: String)] = [
@@ -94,11 +95,32 @@ struct SettingsView: View {
                         .padding(.bottom, 6)
                 }
             }
-            group("Sources") {
+            // One reader at a time, like the popover: the list is long enough to bury the groups
+            // below it, and the first row is what a signed-in install answers with.
+            group("Usage Sources") {
                 if let sources = model.snapshot?.sources, !sources.isEmpty {
-                    ForEach(Array(sources.enumerated()), id: \.element.id) { index, source in
-                        if index > 0 { RowDivider() }
-                        sourceRow(source)
+                    sourceRow(sources[0])
+                    if showAllSources {
+                        ForEach(Array(sources.dropFirst()), id: \.id) { source in
+                            RowDivider()
+                            sourceRow(source)
+                        }
+                    }
+                    if sources.count > 1 {
+                        RowDivider()
+                        Button {
+                            showAllSources.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(showAllSources ? "Hide Sources" : "Show All \(sources.count) Sources")
+                                Image(systemName: showAllSources ? "chevron.up" : "chevron.down")
+                            }
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 7)
                     }
                 } else {
                     Text("Sources appear after the first refresh.")

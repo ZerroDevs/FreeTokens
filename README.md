@@ -248,9 +248,9 @@ Every heatmap cell names its weekday, hour and value on hover. Only readers that
 turns contribute hours, so a store that records only daily totals leaves the heatmap short rather
 than inventing a time.
 
-**Settings → Usage sources** lists each reader with the inputs it found, when it last read them and
-why a count is short (unreadable files, a failed read, no sign-in), which turns *totals may be
-incomplete* into something actionable. **Copy daily CSV** copies the same rows `freetokens export
+**Settings → Usage Sources** shows the first reader with the inputs it found, when it last read it
+and why a count is short (unreadable files, a failed read, no sign-in); **Show all** opens the rest.
+That turns *totals may be incomplete* into something actionable. **Copy daily CSV** copies the same rows `freetokens export
 --csv` prints: one row per local day with tokens, estimated cost and completeness flags.
 
 You need to have signed in once with the Freebuff CLI (`freebuff login`). FreeTokens reads the
